@@ -147,6 +147,13 @@ logger = logging.getLogger(__name__)
 # PREAMBLE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+from osdagbridge.core.reports.styles import (
+    table_setup_latex,
+    get_latex_color_definitions,
+    TableStyles,
+    Colors,
+)
+
 def preamble(project_name, job_number, report_date, report_version='Rev 0'):
     pn = _tex(project_name)
     jn = _tex(job_number)
@@ -203,21 +210,14 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
 
 \numberwithin{table}{chapter}
 \numberwithin{figure}{chapter}
-% Table layout and spacing: consistent padding, row height, and longtable pre/post skips
-\setlength{\tabcolsep}{6pt}
-\renewcommand{\arraystretch}{1.25}
-\setlength{\LTpre}{8pt}
-\setlength{\LTpost}{10pt}
-% Table rules (outline thickness) and extra row height for clarity
-\setlength{\arrayrulewidth}{0.5pt}
-\setlength{\extrarowheight}{2.5pt}
 
+""" + table_setup_latex(preset="comfort") + r"""
 % Prevent tables and sections from overflowing past the page bottom:
 % require at least 7 baseline-skips before starting a table on the current page.
-\BeforeBeginEnvironment{table}{\needspace{7\baselineskip}}
-\BeforeBeginEnvironment{longtable}{\needspace{7\baselineskip}}
+\BeforeBeginEnvironment{table}{\needspace{""" + TableStyles.NEEDSPACE_THRESHOLD + r"""}}
+\BeforeBeginEnvironment{longtable}{\needspace{""" + TableStyles.NEEDSPACE_THRESHOLD + r"""}}
 
-\definecolor{osdagGreen}{HTML}{91B014}
+""" + get_latex_color_definitions() + r"""
 
 \fancypagestyle{main}{
   \fancyhf{}

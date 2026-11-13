@@ -25,6 +25,7 @@ from osdagbridge.core.utils.common import (
     KEY_DD_SHEAR_VED, KEY_DD_SHEAR_VRDC,
     KEY_DD_WK_LIMIT, KEY_MP_ED_TYPE
 )
+from osdagbridge.core.reports.styles import Colors
 
 logger = logging.getLogger(__name__)
 
@@ -313,11 +314,11 @@ def plot_overall_ur_chart(overall_checks: List[Dict[str, Any]], output_path: str
     colors = []
     for u in urs:
         if u > 1.0:
-            colors.append("#D32F2F")  # Over limit (Red)
+            colors.append(Colors.FAIL_RED)     # Over limit (Red)
         elif u > 0.85:
-            colors.append("#F57C00")  # Economical (Amber)
+            colors.append(Colors.WARN_AMBER)   # Economical (Amber)
         else:
-            colors.append("#2E7D32")  # Safe (Green)
+            colors.append(Colors.PASS_GREEN)   # Safe (Green)
             
     fig, ax = plt.subplots(figsize=(10.5, 4.6), dpi=200)
     fig.patch.set_facecolor("white")

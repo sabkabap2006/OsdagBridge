@@ -1088,33 +1088,12 @@ Fatigue Shear Resistance, $Q_r$ & IRC 22 Table 8 ($\phi d$, $N_{sc}$) & """
         except Exception as e:
             pass
 
-    def _render_fig(path_key, caption, label):
-        raw_p = fig_paths.get(path_key)
-        if not raw_p or not os.path.exists(raw_p):
-            return ""
-        clean_p = raw_p.replace("\\", "/")
-        try:
-            from pylatex import Figure
-            from pylatex.utils import NoEscape
-            fig = Figure(position="H")
-            fig.add_image(clean_p, width=NoEscape(r"0.92\textwidth"))
-            fig.add_caption(NoEscape(r"\textbf{" + caption + r"}"))
-            return fig.dumps() + "\n"
-        except Exception:
-            lbl_tex = f"\\label{{{label}}}\n" if label else ""
-            return (
-                r"\begin{figure}[H]" + "\n"
-                r"\centering" + "\n"
-                rf"\includegraphics[width=0.92\textwidth,keepaspectratio]{{{clean_p}}}" + "\n"
-                rf"\caption{{\textbf{{{caption}}}}}" + "\n"
-                + lbl_tex +
-                r"\end{figure}" + "\n"
-            )
+    from osdagbridge.core.reports.styles import render_pylatex_figure
 
     ur_figures = []
-    c1 = _render_fig("ur_chart_overall", "Governing Utilization Ratios Across All Design Checks ($UR = \\text{Demand} / \\text{Capacity}$)", "fig:ur-overall")
-    c2 = _render_fig("ur_chart_girders", "Plate Girder Utilization Ratios by Limit State and Member", "fig:ur-girders")
-    c3 = _render_fig("ur_chart_deck_bracing", "Concrete Deck Slab and Transverse Bracing Utilization Ratios", "fig:ur-deck-bracing")
+    c1 = render_pylatex_figure(fig_paths.get("ur_chart_overall", ""), "Governing Utilization Ratios Across All Design Checks ($UR = \\text{Demand} / \\text{Capacity}$)", "fig:ur-overall")
+    c2 = render_pylatex_figure(fig_paths.get("ur_chart_girders", ""), "Plate Girder Utilization Ratios by Limit State and Member", "fig:ur-girders")
+    c3 = render_pylatex_figure(fig_paths.get("ur_chart_deck_bracing", ""), "Concrete Deck Slab and Transverse Bracing Utilization Ratios", "fig:ur-deck-bracing")
 
     for c in (c1, c2, c3):
         if c:

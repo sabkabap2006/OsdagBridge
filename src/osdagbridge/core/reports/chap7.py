@@ -29,37 +29,16 @@ def ch7_quantities(input_dict: dict, fig_paths: Optional[Dict[str, str]] = None)
         except Exception:
             pass
 
-    def _render_fig(path_key: str, caption: str, label: str) -> str:
-        raw_p = fig_paths.get(path_key)
-        if not raw_p or not os.path.exists(raw_p):
-            return ""
-        clean_p = raw_p.replace("\\", "/")
-        try:
-            from pylatex import Figure
-            from pylatex.utils import NoEscape
-            fig = Figure(position="H")
-            fig.add_image(clean_p, width=NoEscape(r"0.92\textwidth"))
-            fig.add_caption(NoEscape(r"\textbf{" + caption + r"}"))
-            return fig.dumps() + "\n"
-        except Exception:
-            lbl_tex = f"\\label{{{label}}}\n" if label else ""
-            return (
-                r"\begin{figure}[H]" + "\n"
-                r"\centering" + "\n"
-                rf"\includegraphics[width=0.92\textwidth,keepaspectratio]{{{clean_p}}}" + "\n"
-                rf"\caption{{\textbf{{{caption}}}}}" + "\n"
-                + lbl_tex +
-                r"\end{figure}" + "\n"
-            )
+    from osdagbridge.core.reports.styles import render_pylatex_figure, TableStyles
 
     boq_figures = []
-    c1 = _render_fig(
-        "boq_chart_steel",
+    c1 = render_pylatex_figure(
+        fig_paths.get("boq_chart_steel", ""),
         "Structural Steel Tonnage Distribution (Girders, Cross Bracing, and End Diaphragms)",
         "fig:boq-steel-tonnage"
     )
-    c2 = _render_fig(
-        "boq_chart_concrete_rebar",
+    c2 = render_pylatex_figure(
+        fig_paths.get("boq_chart_concrete_rebar", ""),
         "Superstructure Concrete Volume (m³) and Reinforcement Steel Weight (MT)",
         "fig:boq-concrete-rebar"
     )
@@ -91,7 +70,7 @@ The following visualizations illustrate the distribution of structural steel ton
 \label{ch:material-takeoff}
 
 \begingroup
-\setlength{\tabcolsep}{3.5pt}
+\setlength{\tabcolsep}{""" + TableStyles.TABCOLSEP_COMPACT + r"""}
 \begin{longtable}{|C{1.0cm}|L{3.8cm}|C{2.6cm}|C{1.8cm}|C{1.8cm}|C{1.8cm}|C{1.8cm}|}
 \caption{\textbf{Bill of Materials (Steel, Concrete, and Reinforcement Quantities)}}\\
 \hline

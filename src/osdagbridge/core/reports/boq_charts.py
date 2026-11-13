@@ -16,6 +16,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
+from osdagbridge.core.reports.styles import Colors
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +135,12 @@ def plot_steel_tonnage_chart(steel_data: dict, output_path: str) -> Optional[str
         100.0
     ]
 
-    colors = ["#1976D2", "#00897B", "#43A047", "#37474F"]
+    colors = [
+        Colors.STEEL_GIRDER,
+        Colors.STEEL_BRACING,
+        Colors.STEEL_DIAPHRAGM,
+        Colors.STEEL_TOTAL
+    ]
     edge_styles = ["-", "-", "-", "--"]
 
     fig, ax = plt.subplots(figsize=(9.2, 4.5), dpi=200)
@@ -235,7 +241,7 @@ def plot_concrete_rebar_chart(concrete_data: dict, rebar_data: dict, output_path
         [0],
         [c_vol],
         width=0.45,
-        color="#455A64",
+        color=Colors.CONCRETE_SLAB,
         edgecolor="#212121",
         linewidth=0.9,
         zorder=3
@@ -280,7 +286,7 @@ def plot_concrete_rebar_chart(concrete_data: dict, rebar_data: dict, output_path
         [0],
         [r_wt],
         width=0.45,
-        color="#D84315",
+        color=Colors.REBAR_STEEL,
         edgecolor="#212121",
         linewidth=0.9,
         zorder=3
