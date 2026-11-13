@@ -917,7 +917,17 @@ def generate_report(payload, request):
 
             # ── Assemble LaTeX document (fig_paths now has tmp_dir paths) ──
             bridge = ReportDataBridge(payload.output_dict, payload.inputs, payload)
+            bridge._report_images_dir = tmp_images
             span_m = float(payload.inputs.get(KEY_SPAN, 0) or 0)
+
+            # Generate Utilization Ratio charts from design results
+            from osdagbridge.core.reports.ur_charts import generate_all_ur_charts
+            try:
+                ur_chart_paths = generate_all_ur_charts(bridge, tmp_images)
+                for k, p in ur_chart_paths.items():
+                    fig_paths[k] = p.replace('\\', '/')
+            except Exception as e:
+                logger.warning("Failed to generate UR charts: %s", e)
 
             doc_parts = []
             doc_parts.append(preamble(payload.metadata.project_name, payload.metadata.job_number, payload.metadata.report_date, payload.metadata.subtitle or 'Rev 0'))
@@ -940,7 +950,7 @@ def generate_report(payload, request):
             if 'analysis' in secs:
                 doc_parts.append(ch4_analysis(payload.analysis_summary, fig_paths, bridge, span_m))
             if 'design_checks' in secs:
-                doc_parts.append(ch5_design_checks(payload.design_checks, bridge))
+                doc_parts.append(ch5_design_checks(payload.design_checks, bridge, fig_paths))
             if 'drawings' in secs and payload.options.include_figures:
                 doc_parts.append(ch6_drawings(fig_paths))
 
@@ -993,6 +1003,11 @@ def generate_report(payload, request):
                 shutil.copy2(tmp_tex, tex_path)
             if os.path.exists(tmp_pdf):
                 shutil.copy2(tmp_pdf, pdf_path)
+            if os.path.exists(tmp_images) and os.listdir(tmp_images):
+                out_images = os.path.join(request.output_dir, 'images')
+                os.makedirs(out_images, exist_ok=True)
+                for f in os.listdir(tmp_images):
+                    shutil.copy2(os.path.join(tmp_images, f), os.path.join(out_images, f))
 
         if os.path.exists(pdf_path):
             logger.info("Report generated: %s", pdf_path)

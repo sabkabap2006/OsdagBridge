@@ -3,7 +3,9 @@
 # Extracted from report_generator.py — DO NOT add business logic here.
 # =============================================================================
 from __future__ import annotations
-from typing import TYPE_CHECKING
+import os
+import tempfile
+from typing import TYPE_CHECKING, Dict, Any, Optional
 
 from osdagbridge.core.utils.common import (
     KEY_DD_AS_BOT,
@@ -145,7 +147,7 @@ from osdagbridge.core.reports.report_utils import _tex, _render_value, get_girde
 
 if TYPE_CHECKING:
     pass
-def ch5_design_checks(checks_data, bridge) -> str:
+def ch5_design_checks(checks_data, bridge, fig_paths=None) -> str:
     """Chapter 5 — Design Checks.
 
     Parameters
@@ -154,7 +156,11 @@ def ch5_design_checks(checks_data, bridge) -> str:
         Raw checks payload (currently unused; data is sourced from bridge).
     bridge : ReportDataBridge
         Provides input_dict, output_dict, and helper methods.
+    fig_paths : dict, optional
+        Dictionary mapping figure names to image paths on disk.
     """
+    if fig_paths is None:
+        fig_paths = {}
     girder_entries = get_girder_entries(bridge.input_dict)
     if not girder_entries:
         n = int(bridge.input_dict.get(KEY_TS_NO_OF_GIRDERS, 1))
@@ -1070,6 +1076,72 @@ Fatigue Shear Resistance, $Q_r$ & IRC 22 Table 8 ($\phi d$, $N_{sc}$) & """
     ]
     t522_content = "\n".join(_t522)
 
+    # ── Section 5.5: Utilization Ratio Charts ────────────────────────────────
+    from osdagbridge.core.reports.ur_charts import generate_all_ur_charts
+
+    # If UR charts not already in fig_paths, try generating them
+    if not any(k in fig_paths for k in ("ur_chart_overall", "ur_chart_girders", "ur_chart_deck_bracing")):
+        tmp_img_dir = getattr(bridge, "_report_images_dir", None) or os.path.join(tempfile.gettempdir(), "osdag_ur_images")
+        try:
+            generated_paths = generate_all_ur_charts(bridge, tmp_img_dir)
+            fig_paths.update(generated_paths)
+        except Exception as e:
+            pass
+
+    def _render_fig(path_key, caption, label):
+        raw_p = fig_paths.get(path_key)
+        if not raw_p or not os.path.exists(raw_p):
+            return ""
+        clean_p = raw_p.replace("\\", "/")
+        try:
+            from pylatex import Figure
+            from pylatex.utils import NoEscape
+            fig = Figure(position="H")
+            fig.add_image(clean_p, width=NoEscape(r"0.92\textwidth"))
+            fig.add_caption(NoEscape(r"\textbf{" + caption + r"}"))
+            return fig.dumps() + "\n"
+        except Exception:
+            lbl_tex = f"\\label{{{label}}}\n" if label else ""
+            return (
+                r"\begin{figure}[H]" + "\n"
+                r"\centering" + "\n"
+                rf"\includegraphics[width=0.92\textwidth,keepaspectratio]{{{clean_p}}}" + "\n"
+                rf"\caption{{\textbf{{{caption}}}}}" + "\n"
+                + lbl_tex +
+                r"\end{figure}" + "\n"
+            )
+
+    ur_figures = []
+    c1 = _render_fig("ur_chart_overall", "Governing Utilization Ratios Across All Design Checks ($UR = \\text{Demand} / \\text{Capacity}$)", "fig:ur-overall")
+    c2 = _render_fig("ur_chart_girders", "Plate Girder Utilization Ratios by Limit State and Member", "fig:ur-girders")
+    c3 = _render_fig("ur_chart_deck_bracing", "Concrete Deck Slab and Transverse Bracing Utilization Ratios", "fig:ur-deck-bracing")
+
+    for c in (c1, c2, c3):
+        if c:
+            ur_figures.append(c)
+
+    if ur_figures:
+        ur_section_content = r"""
+\vspace{1.5em}
+\subsection{Utilization Ratio Charts}
+\label{sec:ur-charts}
+
+The utilization ratio (\(UR\)) expresses the ratio of design demand to code-specified structural capacity:
+\[
+UR = \frac{\text{Demand}}{\text{Capacity}}
+\]
+An allowable threshold \(UR \le 1.0\) indicates structural compliance under the governing load combinations (IRC 22:2014, IS 800:2007, and IRC 112:2020). The red dashed horizontal reference line marks the code compliance limit (\(UR = 1.0\)).
+
+""" + "\n\\vspace{1em}\n".join(ur_figures)
+    else:
+        ur_section_content = r"""
+\vspace{1.5em}
+\subsection{Utilization Ratio Charts}
+\label{sec:ur-charts}
+
+\noindent\textit{Note: Utilization ratio charts are generated automatically when design analysis results are available.}
+"""
+
     return r"""
 \chapter{Design Checks}
 
@@ -1655,5 +1727,5 @@ End diaphragms at the supports transfer transverse loads to the bearings, restra
 \end{longtable}
 \noindent\textit{Note: UR = Demand / Capacity. All values $\leq 1.0$ indicate passing checks. The governing check for each component is highlighted in the individual design check sections above.}
 
-"""
+""" + ur_section_content
 
