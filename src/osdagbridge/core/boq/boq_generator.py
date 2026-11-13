@@ -65,6 +65,12 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
         "bracing_diag_vol_total": "N.A.",
         "bracing_diag_wt_single": "N.A.",
         "bracing_diag_wt_total": "N.A.",
+
+        "ed_vol_formula": r"\placeholder{Area $\times$ Length}",
+        "ed_qty": "N.A.",
+        "ed_vol_total": "N.A.",
+        "ed_wt_single": "N.A.",
+        "ed_wt_total": "N.A.",
         
         "concrete_deck_vol_formula": r"\placeholder{Width $\times$ Thickness $\times$ Length}",
         "concrete_deck_qty": "N.A.",
@@ -91,8 +97,8 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
         "crash_barrier_wt_total": "N.A.",
     }
     try:
-        span_val = inputs.get(KEY_SPAN)
-        n_girders_val = inputs.get(KEY_TS_NO_OF_GIRDERS)
+        span_val = inputs.get(KEY_SPAN) or inputs.get("span")
+        n_girders_val = inputs.get(KEY_TS_NO_OF_GIRDERS) or inputs.get("no_of_girders")
         if span_val is None or n_girders_val is None:
             return quantities
             
@@ -330,6 +336,69 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                 quantities[f"{prefix}_wt_single"] = "N.A."
                 quantities[f"{prefix}_wt_total"] = "N.A."
 
+        # 5d. End Diaphragms (Cu.m) and Weight (MT)
+        ed_type = ""
+        for k, v in list(inputs.items()) + list(outputs.items()):
+            if "end_diaphragm" in str(k) and "type" in str(k) and v:
+                ed_type = str(v)
+                break
+        ed_is_beam = any(t in ed_type.lower() for t in ("beam", "rolled", "welded"))
+
+        # Check end diaphragm area in cm²
+        ed_area_cm2 = (
+            outputs.get("transverse_member_design.ed.section_properties.end_diaphragm.G1G2.A")
+            or outputs.get("transverse_member_design.ed.section_properties.bracing.G1G2.A")
+            or outputs.get("transverse_member_design.ed.section_properties.end_diaphragm.A")
+        )
+        ed_area = 0.0
+        if ed_area_cm2 is not None:
+            try:
+                ed_area = float(ed_area_cm2) / 10000.0  # cm² to m²
+            except Exception:
+                pass
+
+        # If cross-bracing ED and no specific ed_area, fallback to bracing_area
+        if ed_area <= 0.0 and not ed_is_beam and bracing_area > 0.0:
+            ed_area = bracing_area
+
+        ed_bays = 2 * (n_girders - 1)
+        if ed_bays > 0 and spacing > 0.0 and ed_area > 0.0:
+            if ed_is_beam:
+                # Beam diaphragm: 1 transverse beam per bay across the 2 ends
+                ed_vol_single = ed_area * spacing
+                ed_vol_total = ed_bays * ed_vol_single
+                ed_wt_single = ed_vol_single * 7.85
+                ed_wt_total = ed_vol_total * 7.85
+
+                quantities["ed_vol_formula"] = f"${ed_area:.5f}\\text{{ m}}^2 \\times {spacing:.2f}\\text{{ m}} = {ed_vol_single:.5f}\\text{{ m}}^3$"
+                quantities["ed_qty"] = str(ed_bays)
+                quantities["ed_vol_total"] = f"{ed_vol_total:.2f}"
+                quantities["ed_wt_single"] = f"{ed_wt_single:.4f}"
+                quantities["ed_wt_total"] = f"{ed_wt_total:.2f}"
+            else:
+                # Cross bracing diaphragm: 2 diagonals + top chord + bottom chord per bay
+                ed_geom = (outputs.get("end_diaphragm_forces_dict") or {}).get("geometry") or {}
+                ed_diag_len = float(ed_geom.get("diagonal_length_m") or 0.0)
+                if ed_diag_len <= 0.0:
+                    ed_diag_len = bracing_len if bracing_len > 0.0 else math.sqrt(spacing**2 + (span / 15.0)**2)
+
+                ed_vol_single = ed_area * (2.0 * ed_diag_len + 2.0 * spacing)
+                ed_vol_total = ed_bays * ed_vol_single
+                ed_wt_single = ed_vol_single * 7.85
+                ed_wt_total = ed_vol_total * 7.85
+
+                quantities["ed_vol_formula"] = f"${ed_area:.5f}\\text{{ m}}^2 \\times ({2.0 * ed_diag_len + 2.0 * spacing:.2f}\\text{{ m}}) = {ed_vol_single:.5f}\\text{{ m}}^3$"
+                quantities["ed_qty"] = str(ed_bays)
+                quantities["ed_vol_total"] = f"{ed_vol_total:.2f}"
+                quantities["ed_wt_single"] = f"{ed_wt_single:.4f}"
+                quantities["ed_wt_total"] = f"{ed_wt_total:.2f}"
+        else:
+            quantities["ed_vol_formula"] = "N.A."
+            quantities["ed_qty"] = "N.A."
+            quantities["ed_vol_total"] = "N.A."
+            quantities["ed_wt_single"] = "N.A."
+            quantities["ed_wt_total"] = "N.A."
+
         # 6. Crash Barrier (Cu.m) and Weight (MT)
         KEY_CB_AREA = "typical_section.crash_barrier.area"
         cb_area = 0.0
@@ -359,6 +428,25 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             quantities["crash_barrier_vol_total"] = "N.A."
             quantities["crash_barrier_wt_single"] = "N.A."
             quantities["crash_barrier_wt_total"] = "N.A."
+
+        # 7. Total Structural Steel Summary (MT)
+        try:
+            total_steel_mt = 0.0
+            has_steel = False
+            gw = quantities.get("steel_girders_wt_total")
+            if gw and gw != "N.A.":
+                total_steel_mt += float(gw)
+                has_steel = True
+            for k in ("bracing_top_wt_total", "bracing_bot_wt_total", "bracing_diag_wt_total", "ed_wt_total"):
+                bw = quantities.get(k)
+                if bw and bw != "N.A.":
+                    total_steel_mt += float(bw)
+            if has_steel:
+                quantities["total_structural_steel_wt"] = f"{total_steel_mt:.2f}"
+            else:
+                quantities["total_structural_steel_wt"] = "N.A."
+        except Exception:
+            quantities["total_structural_steel_wt"] = "N.A."
 
     except Exception as exc:
         logger.warning(f"Error calculating material quantities: {exc}")
