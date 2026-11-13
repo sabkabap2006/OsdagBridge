@@ -156,7 +156,18 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
 \documentclass[12pt,a4paper]{report}
 
 % Packages
-\usepackage[a4paper, margin=1in]{geometry}
+\usepackage[
+    a4paper,
+    top=24mm,
+    bottom=32mm,
+    left=20mm,
+    right=20mm,
+    headheight=20pt,
+    headsep=6mm,
+    footskip=15mm
+]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -194,17 +205,17 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
 \numberwithin{figure}{chapter}
 % Table layout and spacing: consistent padding, row height, and longtable pre/post skips
 \setlength{\tabcolsep}{6pt}
-\renewcommand{\arraystretch}{1.12}
-\setlength{\LTpre}{0pt}
-\setlength{\LTpost}{6pt}
-% Table rules (outline thickness) and small extra row height for clarity
+\renewcommand{\arraystretch}{1.25}
+\setlength{\LTpre}{8pt}
+\setlength{\LTpost}{10pt}
+% Table rules (outline thickness) and extra row height for clarity
 \setlength{\arrayrulewidth}{0.5pt}
-\setlength{\extrarowheight}{0.6pt}
+\setlength{\extrarowheight}{2.5pt}
 
-% Prevent tables from overflowing past the page bottom:
-% if fewer than 5 baseline-skips remain, break to the next page first.
-\BeforeBeginEnvironment{table}{\needspace{5\baselineskip}}
-\BeforeBeginEnvironment{longtable}{\needspace{5\baselineskip}}
+% Prevent tables and sections from overflowing past the page bottom:
+% require at least 7 baseline-skips before starting a table on the current page.
+\BeforeBeginEnvironment{table}{\needspace{7\baselineskip}}
+\BeforeBeginEnvironment{longtable}{\needspace{7\baselineskip}}
 
 \definecolor{osdagGreen}{HTML}{91B014}
 
@@ -214,16 +225,13 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
   \fancyhead[R]{""" + rd + r""" $|$ """ + rv + r"""}
   \fancyfoot[L]{Osdag $|$ FOSSEE $|$ Indian Institute of Technology Bombay}
   \fancyfoot[R]{Page \thepage\ of \pageref{LastPage}}
-  \renewcommand{\headrule}{\color{osdagGreen}\hrule width\headwidth height 1pt \vspace{2pt}}
+  \renewcommand{\headrule}{\color{osdagGreen}\hrule width\headwidth height 1pt \vskip 4pt}
   \renewcommand{\footrule}{%
     \ifbool{hasSDonPage}{%
-      \vspace{-20pt}%
       \hbox to \headwidth{\textcolor{black}{\footnotesize\textit{* Software default value}}\hfil}%
-      \vspace{4pt}%
-    }{%
-      \vspace{-8pt}%
-    }%
-    \color{osdagGreen}\hrule width\headwidth height 1pt \vspace{6pt}%
+      \vskip 3pt%
+    }{}%
+    \color{osdagGreen}\hrule width\headwidth height 1pt \vskip 4pt%
   }
 }
 \fancypagestyle{plain}{
@@ -232,16 +240,13 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
   \fancyhead[R]{""" + rd + r""" $|$ """ + rv + r"""}
   \fancyfoot[L]{Osdag $|$ FOSSEE $|$ Indian Institute of Technology Bombay}
   \fancyfoot[R]{Page \thepage\ of \pageref{LastPage}}
-  \renewcommand{\headrule}{\color{osdagGreen}\hrule width\headwidth height 1pt \vspace{2pt}}
+  \renewcommand{\headrule}{\color{osdagGreen}\hrule width\headwidth height 1pt \vskip 4pt}
   \renewcommand{\footrule}{%
     \ifbool{hasSDonPage}{%
-      \vspace{-20pt}%
       \hbox to \headwidth{\textcolor{black}{\footnotesize\textit{* Software default value}}\hfil}%
-      \vspace{4pt}%
-    }{%
-      \vspace{-8pt}%
-    }%
-    \color{osdagGreen}\hrule width\headwidth height 1pt \vspace{6pt}%
+      \vskip 3pt%
+    }{}%
+    \color{osdagGreen}\hrule width\headwidth height 1pt \vskip 4pt%
   }
 }
 \fancypagestyle{firstpage}{
@@ -249,9 +254,10 @@ def preamble(project_name, job_number, report_date, report_version='Rev 0'):
   \renewcommand{\headrulewidth}{0pt}
   \fancyfoot[L]{Osdag $|$ FOSSEE $|$ Indian Institute of Technology Bombay}
   \fancyfoot[R]{Page \thepage\ of \pageref{LastPage}}
-  \renewcommand{\footrule}{\vspace{-8pt}\color{osdagGreen}\hrule width\headwidth height 1pt \vspace{6pt}}
+  \renewcommand{\footrule}{\color{osdagGreen}\hrule width\headwidth height 1pt \vskip 4pt}
 }
 \pagestyle{main}
+\raggedbottom
 \setstretch{1.15}
 
 % Custom Commands
@@ -851,6 +857,16 @@ def generate_report(payload, request):
                     os.environ['PATH'] = str(latex_env.bin_dir) + os.pathsep + os.environ.get('PATH', '')
         except Exception as e:
             logger.info("osdag_latex_env not found or failed to load. (%s)", e)
+
+        if compiler == 'pdflatex':
+            found = shutil.which('pdflatex')
+            if not found:
+                for candidate in ['/Library/TeX/texbin/pdflatex', '/usr/local/bin/pdflatex', '/usr/bin/pdflatex']:
+                    if os.path.exists(candidate):
+                        compiler = candidate
+                        bin_dir = os.path.dirname(candidate)
+                        os.environ['PATH'] = bin_dir + os.pathsep + os.environ.get('PATH', '')
+                        break
             
         logger.info("Compiler: %s", compiler)
 

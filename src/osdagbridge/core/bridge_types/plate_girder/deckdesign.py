@@ -28,6 +28,8 @@ from osdagbridge.core.utils.common import (
     KEY_TS_GIRDER_SPACING, KEY_TS_DECK_OVERHANG, KEY_TS_DECK_THICKNESS,
     KEY_DS_REINF_MATERIAL, KEY_DS_TOP_CLEAR_COVER, KEY_DS_BOTTOM_CLEAR_COVER,
     KEY_DS_REINF_BOUNDS, KEY_WC_THICKNESS, KEY_MP_CB_SPACING,
+    KEY_LL_IRC_CLASS_A, KEY_LL_IRC_70R_WHEELED, KEY_LL_IRC_70R_TRACKED,
+    KEY_LL_IRC_70R_BOGIE, KEY_LL_IRC_AA_WHEELED, KEY_LL_IRC_AA_TRACKED,
     # Report output keys — stored in output_dict["deck_report_values"]
     KEY_DD_VEHICLE, KEY_DD_IMPACT_FACTOR, KEY_DD_GAMMA_DL,
     KEY_DD_GAMMA_LL, KEY_DD_SPAN, KEY_DD_WDL,
@@ -303,11 +305,42 @@ def _sls_crack_width(M_SLS_kNm: float, As_mm2: float, dia_mm: float,
 
 # ── governing vehicle ─────────────────────────────────────────────────────────
 
-def _governing_vehicle(carriageway_width_m: float) -> str:
+def _governing_vehicle(carriageway_width_m: float, input_dict: dict = None) -> str:
     """
-    Return the governing vehicle class based on IRC 6:2017 Table 6A.
-    Class 70R(W) governs when at least one 70R lane fits; Class A otherwise.
+    Return the governing vehicle class based on IRC 6:2017 Table 6A and the vehicles
+    selected dynamically in the OsdagBridge GUI.
     """
+    if input_dict and isinstance(input_dict, dict):
+        def _chk(k):
+            val = input_dict.get(k)
+            if val is None:
+                return False
+            return val is True or str(val).strip().lower() in ("true", "yes", "1", "checked")
+
+        has_70rw = _chk(KEY_LL_IRC_70R_WHEELED)
+        has_70rt = _chk(KEY_LL_IRC_70R_TRACKED)
+        has_70rb = _chk(KEY_LL_IRC_70R_BOGIE)
+        has_aa_w = _chk(KEY_LL_IRC_AA_WHEELED)
+        has_aa_t = _chk(KEY_LL_IRC_AA_TRACKED)
+        has_a    = _chk(KEY_LL_IRC_CLASS_A)
+
+        result = IRC6_2017.table_6A(carriageway_width_m)
+        combos = result.get("vehicle_combinations", [])
+        fits_70r = any("Class70R" in combo for combo in combos)
+
+        if has_70rw and fits_70r:
+            return KEY_VEHICLE[0]  # Class70R(W)
+        if has_70rt and fits_70r:
+            return KEY_VEHICLE[1]  # Class70R(T)
+        if has_70rb and fits_70r:
+            return KEY_VEHICLE[0]
+        if has_aa_w:
+            return KEY_VEHICLE[0]
+        if has_aa_t:
+            return KEY_VEHICLE[1]
+        if has_a:
+            return KEY_VEHICLE[2]  # ClassA
+
     result = IRC6_2017.table_6A(carriageway_width_m)
     combos = result.get("vehicle_combinations", [])
     for combo in combos:
@@ -496,7 +529,7 @@ def design_deck_slab(input_dict: dict, fck: float, fctm: float, fy: float, Es: f
     cover_bot_ok = cover_bot_mm >= min_cover_rec_mm
 
     # ── 3. governing vehicle & IRC 6 loads ────────────────────────────────────
-    vehicle_class = _governing_vehicle(cw_m)
+    vehicle_class = _governing_vehicle(cw_m, inp)
 
     # Impact factor — IRC 6:2017 Cl.208
     if vehicle_class in (KEY_VEHICLE[0], KEY_VEHICLE[1]):

@@ -31,8 +31,11 @@ def _max_member_efficiency(pair_designs):
     """Maximum Osdag 'efficiency' (utilization ratio) over a cross-bracing or
     end-diaphragm result dump (nested pair -> member -> force_type -> raw).
     Reads already-computed results only; nothing is recalculated here."""
-    from osdagbridge.core.bridge_types.plate_girder.results_data import _extract_osdag_summary
-    if not isinstance(pair_designs, dict):
+    if not isinstance(pair_designs, dict) or not pair_designs:
+        return None
+    try:
+        from osdagbridge.core.bridge_types.plate_girder.results_data import _extract_osdag_summary
+    except ImportError:
         return None
     best = None
     for members in pair_designs.values():
@@ -190,7 +193,7 @@ This section provides a concise summary of the bridge design, key inputs, govern
 \label{sec:project-overview}
 
 
-\begin{tabular}{|L{5.5cm}|L{8.5cm}|}
+\begin{tabular}{|L{5.5cm}|p{10.0cm}|}
 \hline
 \textbf{Bridge Type} & """ + (_render_value(input_dict, KEY_STRUCTURE_TYPE)) + r""" \\
 \hline
@@ -219,7 +222,11 @@ This section provides a concise summary of the bridge design, key inputs, govern
 
 \newpage
 
-""" + cs_fig + '\n\n' + geom_fig + '\n\n' + table1 + r"""
+""" + cs_fig + '\n\n' + geom_fig + r"""
+
+\newpage
+
+""" + table1 + r"""
 
 \vspace{0.4em}
 \noindent\textit{Note: Utilization ratio (UR) = demand / capacity. A value $< 1.0$ indicates a passing check.}

@@ -70,7 +70,23 @@ def _ensure_std_streams():
         sys.stderr = stream
 
 
+def _ensure_qt_plugin_path():
+    """Ensure PySide6 uses its own Qt platform plugins, avoiding conflicts
+    with Conda or system Qt5 plugin paths."""
+    try:
+        import PySide6
+        pyside_dir = os.path.dirname(PySide6.__file__)
+        platforms_dir = os.path.join(pyside_dir, "Qt", "plugins", "platforms")
+        if os.path.isdir(platforms_dir):
+            os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = platforms_dir
+        if "QT_PLUGIN_PATH" in os.environ:
+            del os.environ["QT_PLUGIN_PATH"]
+    except Exception:
+        pass
+
+
 _ensure_std_streams()
+_ensure_qt_plugin_path()
 
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon

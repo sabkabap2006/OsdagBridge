@@ -73,7 +73,7 @@ def get_girder_entries(input_dict):
     return entries
 
 
-def _fig_or_placeholder(path, caption, width=r'0.9\textwidth'):
+def _fig_or_placeholder(path, caption, width=r'0.9\textwidth', height=r'7.5cm'):
     """Embed figure if path is provided (file already copied to assets), else show placeholder box.
     path is the relative path as pdflatex will see it (e.g. 'assets/plan.png').
     """
@@ -81,13 +81,13 @@ def _fig_or_placeholder(path, caption, width=r'0.9\textwidth'):
         p = path.replace('\\', '/')
         return (r'\begin{figure}[H]' + '\n'
                 r'\centering' + '\n'
-                r'\includegraphics[width=' + width + ']{' + p + '}\n'
+                r'\includegraphics[width=' + width + ',height=' + height + ',keepaspectratio]{' + p + '}\n'
                 r'\caption*{' + caption + '}\n'
                 r'\end{figure}')
     return (r'\begin{figure}[H]' + '\n'
             r'\centering' + '\n'
-            r'\fbox{\parbox{0.97\textwidth}{' + '\n'
-            r'\textit{[ PLACEHOLDER: ' + caption + r' ]}' + '\n'
+            r'\fbox{\parbox[c][3cm][c]{0.95\textwidth}{' + '\n'
+            r'\centering\textit{[ PLACEHOLDER: ' + caption + r' ]}' + '\n'
             r'}}' + '\n'
             r'\caption*{' + caption + '}\n'
             r'\end{figure}')
