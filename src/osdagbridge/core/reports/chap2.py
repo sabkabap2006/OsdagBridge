@@ -71,6 +71,7 @@ from osdagbridge.core.utils.common import (
 )
 
 from osdagbridge.core.reports.report_utils import _render_value, get_girder_entries, _tex
+from osdagbridge.core.reports.styles import TableStyles, format_dim_mm
 
 def ch2_input_parameters(m, input_dict, output_dict=None):
     girder_entries = get_girder_entries(input_dict)
@@ -83,6 +84,46 @@ def ch2_input_parameters(m, input_dict, output_dict=None):
                       + r""" \\[6pt]
 \hline
 """)
+    # Dynamic superstructure optimization narrative parameters
+    try:
+        _cw_val = float(input_dict.get(KEY_CARRIAGEWAY_WIDTH, 4.25) or 4.25)
+    except (TypeError, ValueError):
+        _cw_val = 4.25
+    try:
+        _ng_val = int(input_dict.get(KEY_TS_NO_OF_GIRDERS, 3) or 3)
+    except (TypeError, ValueError):
+        _ng_val = 3
+    try:
+        _sp_val = float(input_dict.get(KEY_TS_GIRDER_SPACING, 1.72) or 1.72)
+    except (TypeError, ValueError):
+        _sp_val = 1.72
+    try:
+        _oh_val = float(input_dict.get(KEY_TS_DECK_OVERHANG, 0.86) or 0.86)
+    except (TypeError, ValueError):
+        _oh_val = 0.86
+    try:
+        _w_val = float(input_dict.get(KEY_TS_OVERALL_WIDTH, 5.15) or 5.15)
+    except (TypeError, ValueError):
+        _w_val = 5.15
+    _lanes_val = str(input_dict.get(KEY_WC_LD_LANE_TABLE_COUNT, "2")).strip()
+    _fp_str = str(input_dict.get(KEY_FOOTPATH, "")).strip().lower()
+    _has_fp = _fp_str not in ("none", "no", "", "0", "0.0")
+    _fp_desc = "with footpaths" if _has_fp else "without footpaths"
+    _bays = max(_ng_val - 1, 1)
+    _girder_bay_span = _bays * _sp_val
+
+    _narrative = (
+        f"The bridge design was evaluated using the OsdagBridge optimization module. "
+        f"The primary user input specified a carriageway width of {_cw_val:.2f}~m {_fp_desc} "
+        f"(Table~\\ref{{subsec:bridge-geometry}}). To accommodate the {_lanes_val} design traffic lanes "
+        f"across the {_cw_val:.2f}~m carriageway while providing the requisite lateral crash barriers ($2 \\times 0.45\\text{{ m}}$), "
+        f"the software optimization synthesized a {_ng_val}-girder plate girder configuration (girders G1 through G{_ng_val}) "
+        f"with an overall deck width of {_w_val:.2f}~m, transverse girder spacing of {_sp_val:.2f}~m "
+        f"({_bays} \\text{{ bays}} \\times {_sp_val:.2f}\\text{{~m}} = {_girder_bay_span:.2f}\\text{{~m}} between outermost girder centerlines), "
+        f"and symmetric deck overhangs of {_oh_val:.3f}~m on each side "
+        f"({_girder_bay_span:.2f}\\text{{~m}} + 2 \\times {_oh_val:.3f}\\text{{~m}} = {_w_val:.2f}\\text{{~m}})."
+    )
+
     return r"""
 \chapter{Input Parameters}
 
@@ -106,6 +147,10 @@ This section documents all inputs provided to OsdagBridge. User-provided inputs 
 \textbf{parameter} & \textbf{value} \\
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 \textnormal{Project Location} & """ + _tex(m.project_location) + r""" \\
 \hline
 \textnormal{Latitude / Longitude} & """ + (_render_value(input_dict,'latitude')) + ', ' + (_render_value(input_dict,'longitude')) + r""" \\
@@ -128,6 +173,10 @@ This section documents all inputs provided to OsdagBridge. User-provided inputs 
 \textbf{parameter} & \textbf{value} \\
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 \textnormal{Type of Structure} & """ + (_render_value(input_dict, KEY_STRUCTURE_TYPE)) + r""" \\
 \hline
 \textnormal{Span (m)} & """ + (_render_value(input_dict, KEY_SPAN, ' m')) + r""" \\
@@ -152,6 +201,10 @@ This section documents all inputs provided to OsdagBridge. User-provided inputs 
 \textbf{parameter} & \textbf{value} \\
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 \textnormal{Girder Steel Grade (IS 2062)} & """ + (_render_value(input_dict, KEY_GIRDER)) + r""" \\
 \hline
 \textnormal{Cross Bracing Steel Grade} & """ + (_render_value(input_dict, KEY_CROSS_BRACING)) + r""" \\
@@ -163,15 +216,17 @@ This section documents all inputs provided to OsdagBridge. User-provided inputs 
 \end{longtable}
 
 \newpage
-\section{Additional Inputs}
+\section{Superstructure Geometry and Optimization}
 \label{sec:additional-inputs}
 
-Where the user has modified additional inputs, those values are reported here. Where no modification was made, the software default is shown.
+""" + _narrative + r"""
+
+The user inputs, software defaults, and optimized superstructure parameters are documented in Table~\ref{subsec:typical-section-details}.
 
 \vspace{0.8cm}
 
 \begin{longtable}{|L{5.5cm}|p{10.0cm}|}
-\caption{\textbf{Typical Section Details}}\\
+\caption{\textbf{Typical Section Details}}\label{subsec:typical-section-details}\\
 \hline
 \textbf{parameter} & \textbf{value} \\
 \hline
@@ -180,6 +235,10 @@ Where the user has modified additional inputs, those values are reported here. W
 \textbf{parameter} & \textbf{value} \\
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 \textnormal{Overall Bridge Width (m)} & """ + (_render_value(input_dict, KEY_TS_OVERALL_WIDTH)) + r""" \\[6pt]
 \hline
 \textnormal{No. of Girders} & """ + (_render_value(input_dict, KEY_TS_NO_OF_GIRDERS)) + r""" \\[6pt]
@@ -190,7 +249,7 @@ Where the user has modified additional inputs, those values are reported here. W
 \hline
 \textnormal{Deck Thickness (mm)} & """ + (_render_value(input_dict, KEY_TS_DECK_THICKNESS, ' mm')) + r""" \\[6pt]
 \hline
-\textnormal{Footpath Width (m)} & """ + (_render_value(input_dict, KEY_TS_FOOTPATH_WIDTH, ' m')) + r""" (IRC 5 Cl. 104.3.6 min: 1.5 m) \\[6pt]
+\textnormal{Footpath Width (m)} & """ + ("None (0.0 m)" if str(input_dict.get(KEY_FOOTPATH, "")).strip().lower() in ("none", "no") else (_render_value(input_dict, KEY_TS_FOOTPATH_WIDTH, ' m') + " (IRC 5 Cl. 104.3.6 min: 1.5 m)")) + r""" \\[6pt]
 \hline
 \textnormal{No. of Traffic Lanes} & """ + (_render_value(input_dict, KEY_WC_LD_LANE_TABLE_COUNT)) + r""" (per IRC 5 Cl. 104.3.1) \\[6pt]
 \hline
@@ -208,6 +267,10 @@ Where the user has modified additional inputs, those values are reported here. W
 \textbf{parameter} & \textbf{value} \\
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 \textnormal{Crash Barrier Type} & """ + (_render_value(input_dict, KEY_CB_TYPE)) + r""" \\[6pt]
 \hline
 \textnormal{Crash Barrier Load (kN/m)} & """ + (_render_value(input_dict, KEY_CB_LOAD)) + r""" \\[6pt]
@@ -251,20 +314,25 @@ def _girder_tables(input_dict, n_girders):
     ]
 
     # Helper: one girder-dimension row
+    def _format_mm(key):
+        v = input_dict.get(key)
+        res = format_dim_mm(v)
+        return f"{res} mm" if res != "---" else "---"
+
     def _dim_row(g_lbl, i):
+        d_str = _format_mm(f"{KEY_MP_GIRDER_DEPTH}.G{i}.M1")
+        tw_str = _format_mm(f"{KEY_MP_GIRDER_WEB_THICKNESS}.G{i}.M1")
+        btf_str = _format_mm(f"{KEY_MP_GIRDER_TOP_FLANGE_WIDTH}.G{i}.M1")
+        ttf_str = _format_mm(f"{KEY_MP_GIRDER_TOP_FLANGE_THICKNESS}.G{i}.M1")
+        bbf_str = _format_mm(f"{KEY_MP_GIRDER_BOTTOM_FLANGE_WIDTH}.G{i}.M1")
+        tbf_str = _format_mm(f"{KEY_MP_GIRDER_BOTTOM_FLANGE_THICKNESS}.G{i}.M1")
+        top_flange = f"{btf_str}, {ttf_str}" if (btf_str != "---" or ttf_str != "---") else "---"
+        bot_flange = f"{bbf_str}, {tbf_str}" if (bbf_str != "---" or tbf_str != "---") else "---"
         return (g_lbl + r""" & """
-                + (_render_value(input_dict, f"{KEY_MP_GIRDER_DEPTH}.G{i}.M1", ' mm'))
-                + r""" & """
-                + (_render_value(input_dict, f"{KEY_MP_GIRDER_WEB_THICKNESS}.G{i}.M1", ' mm'))
-                + r""" & """
-                + (_render_value(input_dict, f"{KEY_MP_GIRDER_TOP_FLANGE_WIDTH}.G{i}.M1", ' mm'))
-                + ', '
-                + (_render_value(input_dict, f"{KEY_MP_GIRDER_TOP_FLANGE_THICKNESS}.G{i}.M1", ' mm'))
-                + r""" & """
-                + (_render_value(input_dict, f"{KEY_MP_GIRDER_BOTTOM_FLANGE_WIDTH}.G{i}.M1", ' mm'))
-                + ', '
-                + (_render_value(input_dict, f"{KEY_MP_GIRDER_BOTTOM_FLANGE_THICKNESS}.G{i}.M1", ' mm'))
-                + r""" \\[8pt]
+                + d_str + r""" & """
+                + tw_str + r""" & """
+                + top_flange + r""" & """
+                + bot_flange + r""" \\[8pt]
 \hline
 """)
 
@@ -327,6 +395,10 @@ def _girder_tables(input_dict, n_girders):
 \textbf{Girder} & \textbf{Member ID} & \textbf{Design Mode} & \textbf{Girder Type} & \textbf{Girder Symmetry} \\[6pt]
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 """
             + gen_rows
             + r"""\end{longtable}
@@ -334,16 +406,22 @@ def _girder_tables(input_dict, n_girders):
 \vspace{0.6em}
 
 \vspace{4pt}
+\Needspace*{14\baselineskip}
 \begin{longtable}{|L{1.8cm}|L{2.3cm}|L{1.8cm}|p{4.8cm}|p{4.8cm}|}
 \caption{\textbf{Girder Section Dimensions}}\\
 \hline
 \textbf{Girder} & \textbf{Total Depth, D (mm)} & \textbf{Web, $t_w$ (mm)} & \textbf{Top Flange (b\textsubscript{tf}, t\textsubscript{tf}) mm} & \textbf{Bottom Flange (b\textsubscript{bf}, t\textsubscript{bf}) mm} \\[6pt]
 \hline
 \endfirsthead
+\multicolumn{5}{c}{{\footnotesize\textit{(Table \thetable\ continued from previous page)}}} \\[4pt]
 \hline
 \textbf{Girder} & \textbf{Total Depth, D (mm)} & \textbf{Web, $t_w$ (mm)} & \textbf{Top Flange (b\textsubscript{tf}, t\textsubscript{tf}) mm} & \textbf{Bottom Flange (b\textsubscript{bf}, t\textsubscript{bf}) mm} \\[6pt]
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 """
             + dim_rows
             + r"""\end{longtable}
@@ -361,7 +439,10 @@ def _girder_tables(input_dict, n_girders):
 \textbf{Girder} & \textbf{Torsional / Warping Restraint} & \textbf{Web Philosophy} & \textbf{Intermediate Stiffeners} & \textbf{Longitudinal Stiffeners} & \textbf{Bearing Stiffener} \\[6pt]
 \hline
 \endhead
-
+\hline
+\endfoot
+\hline
+\endlastfoot
 """
             + rst_rows
             + r"""\end{longtable}
@@ -410,43 +491,52 @@ def _bracing_tables(input_dict, n_girders):
 \newpage
 
 \vspace{0.4em}
-\setlength{\tabcolsep}{4pt}
-\setlength\LTleft{0pt}
-\setlength\LTright{\fill}
+\setlength{\tabcolsep}{""" + TableStyles.TABCOLSEP_DEFAULT + r"""}
+\setlength\LTleft{""" + TableStyles.LT_LEFT_ALIGN + r"""}
+\setlength\LTright{""" + TableStyles.LT_RIGHT_ALIGN + r"""}
 
 \begin{longtable}{|L{2.2cm}|L{2.2cm}|L{3.0cm}|L{2.5cm}|C{1.8cm}|C{1.8cm}|}
-\caption{\textbf{Member Properties: Cross Bracing Details}}\\
+\caption{\textbf{Member Properties: Cross Bracing Details (Input / Trial Section)}}\\
 \hline
-\textbf{Location} & \textbf{Member IDs} & \textbf{Type of Bracing} & \textbf{Bracing Section} & \textbf{Spacing (m)} \\
+\textbf{Location} & \textbf{Member IDs} & \textbf{Type of Bracing} & \textbf{Trial Section} & \textbf{Spacing (m)} \\
 \hline
 \endfirsthead
 \hline
-\textbf{Location} & \textbf{Member IDs} & \textbf{Type of Bracing} & \textbf{Bracing Section} & \textbf{Spacing (m)} \\
+\textbf{Location} & \textbf{Member IDs} & \textbf{Type of Bracing} & \textbf{Trial Section} & \textbf{Spacing (m)} \\
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 """
 + cb_rows
 + r"""\end{longtable}
 
 \vspace{0.4em}
 \noindent
-\setlength{\tabcolsep}{4pt}
-\setlength\LTleft{0pt}
-\setlength\LTright{\fill}
+\setlength{\tabcolsep}{""" + TableStyles.TABCOLSEP_DEFAULT + r"""}
+\setlength\LTleft{""" + TableStyles.LT_LEFT_ALIGN + r"""}
+\setlength\LTright{""" + TableStyles.LT_RIGHT_ALIGN + r"""}
 
 \begin{longtable}{|L{2.2cm}|L{2.2cm}|L{3.0cm}|L{2.5cm}|C{1.8cm}|C{1.8cm}|}
-\caption{\textbf{Member Properties: End Diaphragm Details}}\\
+\caption{\textbf{Member Properties: End Diaphragm Details (Input / Trial Section)}}\\
 \hline
-\textbf{Location} & \textbf{Member IDs} & \textbf{Type of Bracing} & \textbf{Bracing Section} \\
+\textbf{Location} & \textbf{Member IDs} & \textbf{Type of Bracing} & \textbf{Trial Section} \\
 \hline
 \endfirsthead
 \hline
-\textbf{Location} & \textbf{Member IDs} & \textbf{Type of Bracing} & \textbf{Bracing Section} \\
+\textbf{Location} & \textbf{Member IDs} & \textbf{Type of Bracing} & \textbf{Trial Section} \\
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 """
 + ed_rows
 + r"""\end{longtable}
+\noindent\textit{Note: Member properties listed above are initial trial sections input by the user. Sized and adopted sections after structural optimization and design checks are presented in Chapter 5.}
 """)
 
 
@@ -469,6 +559,10 @@ def _shear_connector_table(input_dict, output_dict=None):
 \textbf{parameter} & \textbf{value} \\
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 \textnormal{Stud Diameter (mm)} & """ + (_render_value(od, KEY_SD_SHEAR_DIAMETER, ' mm')) + r""" \\[6pt]
 \hline
 \textnormal{Stud Height (mm)} & """ + (_render_value(od, KEY_SD_SHEAR_HEIGHT, ' mm')) + r""" \\[6pt]
@@ -502,6 +596,10 @@ def _safety_factors_table(input_dict):
 \textbf{parameter} & \textbf{value} \\
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 \textnormal{$\gamma_{M0}$ (Yielding / Buckling)} & """ + (_render_value(input_dict, KEY_DO_GAMMA_M0)) + r""" \\[6pt]
 \hline
 \textnormal{$\gamma_{M1}$ (Ultimate Stress)} & """ + (_render_value(input_dict, KEY_DO_GAMMA_M1)) + r""" \\[6pt]
@@ -512,7 +610,7 @@ def _safety_factors_table(input_dict):
 \hline
 \textnormal{$\gamma_v$ (Shear Connectors)} & """ + (_render_value(input_dict, KEY_DO_GAMMA_V)) + r""" \\[6pt]
 \hline
-\textnormal{$\gamma_{fft}$ (Fatigue Load)} & """ + (_render_value(input_dict, KEY_DO_GAMMA_FLT)) + r""" \\[6pt]
+\textnormal{$\gamma_{flt}$ (Fatigue Load)} & """ + (_render_value(input_dict, KEY_DO_GAMMA_FLT)) + r""" \\[6pt]
 \hline
 \textnormal{$\gamma_{Mft}$ (Fatigue Strength)} & """ + (_render_value(input_dict, KEY_DO_GAMMA_MF)) + r""" \\[6pt]
 \hline

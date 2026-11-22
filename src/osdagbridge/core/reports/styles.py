@@ -129,12 +129,24 @@ def format_status_latex(status: Union[str, bool, None], true_label: str = "PASS"
     
     if isinstance(status, bool):
         is_pass = status
-    else:
-        s = str(status).strip().upper()
-        if not s or s in ("---", "N/A", "N.A."):
-            return "---"
-        is_pass = ("PASS" in s or "SAFE" in s or "OK" in s) and ("FAIL" not in s)
+        return f"\\textcolor{{osdagPass}}{{\\textbf{{{true_label}}}}}" if is_pass else f"\\textcolor{{osdagFail}}{{\\textbf{{{false_label}}}}}"
+    
+    s = str(status).strip()
+    s_upper = s.upper()
+    if not s_upper or s_upper in ("---", "N/A", "N.A."):
+        return "---"
+    if "NOT CALCULATED" in s_upper:
+        return r"\textcolor{gray}{\textbf{NOT CALCULATED}}"
+    if "NOT IMPLEMENTED" in s_upper:
+        return r"\textcolor{gray}{\textbf{NOT IMPLEMENTED}}"
+    if "NOT AVAILABLE" in s_upper:
+        return r"\textcolor{gray}{\textbf{NOT AVAILABLE}}"
+    if "NOT APPLICABLE" in s_upper:
+        return r"\textcolor{gray}{\textbf{NOT APPLICABLE}}"
+    if "INCOMPLETE" in s_upper:
+        return r"\textcolor{gray}{\textbf{INCOMPLETE}}"
 
+    is_pass = ("PASS" in s_upper or "SAFE" in s_upper or "OK" in s_upper) and ("FAIL" not in s_upper)
     if is_pass:
         return f"\\textcolor{{osdagPass}}{{\\textbf{{{true_label}}}}}"
     else:
@@ -155,6 +167,60 @@ def format_ur_latex(ur_value: Any) -> str:
         return f"\\textcolor{{osdagWarn}}{{\\textbf{{{formatted}}}}}"
     else:
         return formatted
+
+
+def format_dim_mm(val: Any) -> str:
+    """
+    Format structural steel section dimensions to mm without double conversion.
+    
+    If stored in metres (e.g. 1.67, 0.01, 0.51, 0.022), converts to mm (1670, 10, 510, 22).
+    If already in mm (e.g. 1670, 10, 510, 22), keeps as mm.
+    """
+    if val in (None, "", "N.A.", "N/A", "--", "---"):
+        return "---"
+    try:
+        v = float(val)
+        if v == 0:
+            return "0"
+        # Bridge girder dimensions in metres are <= 6.0 m; in mm they are >= 6.0 mm.
+        if v <= 6.0:
+            v_mm = v * 1000.0
+        else:
+            v_mm = v
+        if abs(v_mm - round(v_mm)) < 1e-3:
+            return f"{int(round(v_mm))}"
+        return f"{v_mm:.1f}"
+    except (ValueError, TypeError):
+        return str(val)
+
+
+def format_length_m(val: Any, precision: int = 2) -> str:
+    """Format length in metres without redundant decimal zeroes (e.g. 30 m, 22 m, 2.29 m)."""
+    if val in (None, "", "N.A.", "N/A", "--", "---"):
+        return "---"
+    try:
+        f = float(val)
+        if abs(f - round(f)) < 1e-4:
+            return f"{int(round(f))} m"
+        return f"{f:.{precision}f} m"
+    except (ValueError, TypeError):
+        return f"{val} m"
+
+
+def format_length_mm(val: Any) -> str:
+    """Format thickness/depth in millimetres (e.g. 250 mm)."""
+    if val in (None, "", "N.A.", "N/A", "--", "---"):
+        return "---"
+    try:
+        f = float(val)
+        # If passed in metres (e.g. 0.25 m), convert to mm
+        if 0 < f < 2.0:
+            f = f * 1000.0
+        if abs(f - round(f)) < 1e-3:
+            return f"{int(round(f))} mm"
+        return f"{f:.1f} mm"
+    except (ValueError, TypeError):
+        return f"{val} mm"
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -183,7 +249,7 @@ class TableStyles:
     LT_RIGHT_ALIGN       = "\\fill" # Fill right margin
 
     # Orphan & footer protection
-    NEEDSPACE_THRESHOLD  = "7\\baselineskip"
+    NEEDSPACE_THRESHOLD  = "10\\baselineskip"
 
 
 def table_setup_latex(preset: str = "default") -> str:
@@ -354,30 +420,44 @@ def render_pylatex_figure(
     caption: str = "",
     label: str = "",
     width: str = r"0.92\textwidth",
-    position: str = "H"
+    height: Optional[str] = None,
+    position: str = "H",
+    starred_caption: bool = False,
 ) -> str:
     """
-    Render a centered, numbered figure using PyLaTeX Figure with resilient LaTeX fallback.
+    Render a centered figure using PyLaTeX Figure with resilient LaTeX fallback.
 
     Parameters
     ----------
     image_path : str
-        Path to image on disk.
+        Path to image on disk (absolute or relative to build dir).
     caption : str
         Figure caption text (bolded per style standard).
     label : str
         LaTeX cross-reference label (e.g. 'fig:ur-overall').
     width : str
         Figure width specification.
+    height : Optional[str]
+        Optional figure height specification (e.g. '7.5cm').
     position : str
         Placement specifier (default 'H' for exact placement).
+    starred_caption : bool
+        If True, render unnumbered caption (caption*).
     """
-    if not image_path or not os.path.exists(image_path):
+    if not image_path:
+        return ""
+    if os.path.isabs(image_path) and not os.path.exists(image_path):
         return ""
 
     clean_path = image_path.replace("\\", "/")
 
-    if PYLATEX_AVAILABLE:
+    opts = f"width={width}"
+    if height:
+        opts += f",height={height},keepaspectratio"
+    else:
+        opts += ",keepaspectratio"
+
+    if PYLATEX_AVAILABLE and not starred_caption and not height:
         try:
             fig = PyLatexFigure(position=position)
             fig.add_image(clean_path, width=PyLatexNoEscape(width))
@@ -391,11 +471,16 @@ def render_pylatex_figure(
 
     # Resilient standard LaTeX fallback
     lbl_str = f"\\label{{{label}}}\n" if label else ""
-    cap_str = f"\\caption{{\\textbf{{{caption}}}}}\n" if caption else ""
+    if caption:
+        cap_cmd = "caption*" if starred_caption else "caption"
+        cap_str = f"\\{cap_cmd}{{\\textbf{{{caption}}}}}\n"
+    else:
+        cap_str = ""
+
     return (
         r"\begin{figure}[" + position + r"]" + "\n"
         r"\centering" + "\n"
-        rf"\includegraphics[width={width},keepaspectratio]{{{clean_path}}}" + "\n"
+        rf"\includegraphics[{opts}]{{{clean_path}}}" + "\n"
         + cap_str
         + lbl_str +
         r"\end{figure}" + "\n"

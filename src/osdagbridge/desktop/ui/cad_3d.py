@@ -1489,16 +1489,16 @@ def main():
         k_top_bracket=True,
 
         diagonal_section_type="ANGLE",
-        diagonal_section_dims=SectionDimsDTO(leg_h=100, leg_w=50, connection_type="LONGER_LEG"),
-        diagonal_thickness=5,
+        diagonal_section_dims=SectionDimsDTO(leg_h=100, leg_w=100, connection_type="LONGER_LEG"),
+        diagonal_thickness=10,
 
-        top_chord_section_type="DOUBLE_CHANNEL",
-        top_chord_section_dims=SectionDimsDTO(leg_h=80, leg_w=40, connection_type="LONGER_LEG"),
-        top_chord_thickness=5,
+        top_chord_section_type="ANGLE",
+        top_chord_section_dims=SectionDimsDTO(leg_h=100, leg_w=100, connection_type="LONGER_LEG"),
+        top_chord_thickness=10,
 
         bottom_chord_section_type="ANGLE",
-        bottom_chord_section_dims=SectionDimsDTO(leg_h=80, leg_w=40, connection_type="LONGER_LEG"),
-        bottom_chord_thickness=5,
+        bottom_chord_section_dims=SectionDimsDTO(leg_h=100, leg_w=100, connection_type="LONGER_LEG"),
+        bottom_chord_thickness=10,
 
         # --- End Diaphragm ---
         end_diaphragm_type="Cross Bracing",
@@ -1506,16 +1506,16 @@ def main():
         end_diaphragm_bracing_type="K",
 
         end_diaphragm_diagonal_section_type="ANGLE",
-        end_diaphragm_diagonal_section_dims=SectionDimsDTO(leg_h=100, leg_w=50, connection_type="LONGER_LEG"),
-        end_diaphragm_diagonal_thickness=5,
+        end_diaphragm_diagonal_section_dims=SectionDimsDTO(leg_h=110, leg_w=110, connection_type="LONGER_LEG"),
+        end_diaphragm_diagonal_thickness=12,
 
-        end_diaphragm_top_chord_section_type="CHANNEL",
-        end_diaphragm_top_chord_section_dims=SectionDimsDTO(leg_h=80, leg_w=40, connection_type="LONGER_LEG"),
-        end_diaphragm_top_chord_thickness=5,
+        end_diaphragm_top_chord_section_type="ANGLE",
+        end_diaphragm_top_chord_section_dims=SectionDimsDTO(leg_h=110, leg_w=110, connection_type="LONGER_LEG"),
+        end_diaphragm_top_chord_thickness=12,
 
         end_diaphragm_bottom_chord_section_type="ANGLE",
-        end_diaphragm_bottom_chord_section_dims=SectionDimsDTO(leg_h=80, leg_w=40, connection_type="LONGER_LEG"),
-        end_diaphragm_bottom_chord_thickness=5,
+        end_diaphragm_bottom_chord_section_dims=SectionDimsDTO(leg_h=110, leg_w=110, connection_type="LONGER_LEG"),
+        end_diaphragm_bottom_chord_thickness=12,
 
         end_diaphragm_section="I_SECTION",
         end_diaphragm_dims=ISectionDimsDTO(depth=800, flange_width=250, web_thickness=12, flange_thickness=100),

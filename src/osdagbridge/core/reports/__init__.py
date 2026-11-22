@@ -16,6 +16,9 @@ from .styles import (
     GEOMETRY_OPTIONS,
     format_status_latex,
     format_ur_latex,
+    format_dim_mm,
+    format_length_m,
+    format_length_mm,
     get_latex_color_definitions,
     table_setup_latex,
     render_pylatex_figure,
@@ -28,6 +31,7 @@ __all__ = [
     "build_report_payload", "generate_report",
     "Colors", "TableStyles", "Typography", "GEOMETRY_OPTIONS",
     "format_status_latex", "format_ur_latex",
+    "format_dim_mm", "format_length_m", "format_length_mm",
     "get_latex_color_definitions", "table_setup_latex",
     "render_pylatex_figure", "apply_pylatex_styles",
 ]

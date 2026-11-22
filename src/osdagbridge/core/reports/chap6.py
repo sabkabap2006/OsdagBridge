@@ -1,3 +1,5 @@
+from osdagbridge.core.reports.styles import render_pylatex_figure
+
 def ch6_drawings(fig_paths):
     """Chapter 6 – Drawings and Visualizations.
 
@@ -25,15 +27,7 @@ def ch6_drawings(fig_paths):
         """Figure block: image first, numbered below. Placeholder if no path."""
         label_tex = (r'\label{' + label + '}\n') if label else ''
         if path:
-            p = path.replace('\\', '/')
-            return (r'\begin{figure}[H]' + '\n'
-                    r'\centering' + '\n'
-                    r'\vspace{4pt}' + '\n'
-                    r'\includegraphics[width=0.85\textwidth]{' + p + '}\n'
-                    r'\caption{' + title + '}\n'
-                    + label_tex
-                    + r'\end{figure}' + '\n'
-                    )
+            return render_pylatex_figure(path, caption=title, label=label or "", width=r"0.85\textwidth", position="H")
         return (r'\begin{figure}[H]' + '\n'
                 r'\centering' + '\n'
                 r'\fbox{\parbox{0.97\textwidth}{' + '\n'

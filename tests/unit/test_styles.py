@@ -11,6 +11,9 @@ from osdagbridge.core.reports.styles import (
     GEOMETRY_OPTIONS,
     format_status_latex,
     format_ur_latex,
+    format_dim_mm,
+    format_length_m,
+    format_length_mm,
     get_latex_color_definitions,
     table_setup_latex,
     get_geometry_latex,
@@ -112,6 +115,24 @@ class TestStyles(unittest.TestCase):
         self.assertIn(r"\label{fig:test-label}", fig_tex)
         self.assertIn(r"\end{figure}", fig_tex)
 
+        # Test starred caption and height options (used by report_utils)
+        fig_starred = render_pylatex_figure(
+            "assets/plan.png",
+            caption="Overview Plan",
+            width=r"0.9\textwidth",
+            height="7.5cm",
+            starred_caption=True
+        )
+        self.assertIn(r"\begin{figure}[H]", fig_starred)
+        self.assertIn(r"\includegraphics[width=0.9\textwidth,height=7.5cm,keepaspectratio]{assets/plan.png}", fig_starred)
+        self.assertIn(r"\caption*{\textbf{Overview Plan}}", fig_starred)
+
+    def test_format_status_latex_custom_labels(self):
+        res = format_status_latex(False, false_label="Fail (Shear, Flexure)")
+        self.assertEqual(res, r"\textcolor{osdagFail}{\textbf{Fail (Shear, Flexure)}}")
+        res_pass = format_status_latex(True, true_label="Pass")
+        self.assertEqual(res_pass, r"\textcolor{osdagPass}{\textbf{Pass}}")
+
     def test_end_to_end_latex_compilation(self):
         pdflatex_bin = None
         for cand in ("/Library/TeX/texbin/pdflatex", "/usr/local/bin/pdflatex", shutil.which("pdflatex")):
@@ -173,6 +194,176 @@ Status: """ + format_status_latex("PASS") + r""" or """ + format_status_latex("F
         pdf_path = os.path.join(self.tmp_dir, "test_styles_doc.pdf")
         self.assertTrue(os.path.exists(pdf_path), f"pdflatex compilation failed: {proc.stdout.decode('utf-8', 'ignore')[-1000:]}")
         self.assertGreater(os.path.getsize(pdf_path), 5000)
+
+
+    def test_vehicle_selection_dynamic(self):
+        from osdagbridge.core.reports.chap3 import ch3_loads
+        from osdagbridge.core.utils.common import (
+            KEY_LL_IRC_CLASS_A, KEY_LL_IRC_70R_WHEELED, KEY_LL_IRC_CLASS_FATIGUE, KEY_SPAN
+        )
+
+        # Case 1: Only Class 70R Wheeled selected
+        inp1 = {
+            KEY_SPAN: "30.0",
+            KEY_LL_IRC_CLASS_A: False,
+            KEY_LL_IRC_70R_WHEELED: True,
+            KEY_LL_IRC_CLASS_FATIGUE: False,
+        }
+        res1 = ch3_loads(inp1)
+        self.assertIn("IRC Class 70R (Wheeled)", res1)
+        self.assertNotIn("IRC Class Fatigue", res1)
+
+        # Case 2: Only Fatigue vehicle selected
+        inp2 = {
+            KEY_SPAN: "30.0",
+            KEY_LL_IRC_CLASS_A: False,
+            KEY_LL_IRC_70R_WHEELED: False,
+            KEY_LL_IRC_CLASS_FATIGUE: True,
+        }
+        res2 = ch3_loads(inp2)
+        self.assertIn("IRC Class Fatigue", res2)
+        self.assertNotIn("IRC Class 70R (Wheeled)", res2)
+
+    def test_ur_charts_covers_four_components(self):
+        from osdagbridge.core.reports.ur_charts import extract_design_utilization_ratios
+
+        class MockBridge:
+            input_dict = {"typical_section.deck_overhang": "1.2"}
+            output_dict = {
+                "design_results": {
+                    "per_girder": {
+                        "G1": {
+                            "checks": [
+                                {"check_id": 1, "demand": 1200.0, "capacity": 2000.0, "dcr": 0.60},
+                                {"check_id": 2, "demand": 400.0, "capacity": 800.0, "dcr": 0.50},
+                            ]
+                        }
+                    }
+                },
+                "deck_design_results": {
+                    "ur_bot_uls": 0.75,
+                    "ur_top_uls": 0.65,
+                },
+                "deck_report_values": {},
+                "end_diaphragm_design_results": {
+                    "G1-G2": {
+                        "diagonal": {
+                            "compression": {
+                                "capacity_kN": 500.0,
+                                "efficiency": 0.82,
+                                "slenderness": 180.0
+                            }
+                        }
+                    }
+                }
+            }
+            def get_cb_pairs(self):
+                return ["G1-G2"]
+            def get_cb_capacity(self, pair, member, ft):
+                return "600.0"
+            def get_cb_efficiency(self, pair, member, ft):
+                return "0.78"
+            def get_cb_slenderness(self, pair, member):
+                return "190.0"
+
+        data = extract_design_utilization_ratios(MockBridge())
+        self.assertIn("girders", data)
+        self.assertIn("deck", data)
+        self.assertIn("bracing", data)
+        self.assertIn("end_diaphragm", data)
+
+        components_in_overall = {item["component"] for item in data["overall"]}
+        self.assertIn("Plate Girder", components_in_overall)
+        self.assertIn("Deck Slab", components_in_overall)
+        self.assertIn("Cross Bracing", components_in_overall)
+        self.assertIn("End Diaphragm", components_in_overall)
+
+    def test_unit_conversion_helpers(self):
+        # format_dim_mm: values in metres (<= 6.0) converted to mm, mm left untouched
+        self.assertEqual(format_dim_mm(1.67), "1670")
+        self.assertEqual(format_dim_mm("1.67"), "1670")
+        self.assertEqual(format_dim_mm(0.01), "10")
+        self.assertEqual(format_dim_mm(0.51), "510")
+        self.assertEqual(format_dim_mm(0.022), "22")
+        self.assertEqual(format_dim_mm(1670), "1670")
+        self.assertEqual(format_dim_mm(10), "10")
+        self.assertEqual(format_dim_mm(510), "510")
+        self.assertEqual(format_dim_mm(22), "22")
+        self.assertEqual(format_dim_mm(None), "---")
+
+        # format_length_m
+        self.assertEqual(format_length_m(30.0), "30 m")
+        self.assertEqual(format_length_m("30.0"), "30 m")
+        self.assertEqual(format_length_m(22), "22 m")
+        self.assertEqual(format_length_m(2.29), "2.29 m")
+        self.assertEqual(format_length_m(None), "---")
+
+        # format_length_mm
+        self.assertEqual(format_length_mm(250.0), "250 mm")
+        self.assertEqual(format_length_mm(0.25), "250 mm")
+        self.assertEqual(format_length_mm(None), "---")
+
+    def test_executive_summary_status_reconciliation(self):
+        from osdagbridge.core.reports.executive_summary import executive_summary
+        from osdagbridge.core.utils.common import (
+            KEY_SPAN, KEY_CARRIAGEWAY_WIDTH, KEY_TS_GIRDER_SPACING, KEY_TS_DECK_THICKNESS,
+            KEY_STRUCTURE_TYPE, KEY_TS_NO_OF_GIRDERS
+        )
+
+        input_dict = {
+            KEY_STRUCTURE_TYPE: "Composite Plate Girder",
+            KEY_SPAN: "30.0",
+            KEY_CARRIAGEWAY_WIDTH: "22.0",
+            KEY_TS_NO_OF_GIRDERS: "4",
+            KEY_TS_GIRDER_SPACING: "2.29",
+            KEY_TS_DECK_THICKNESS: "250.0",
+        }
+        output_dict = {
+            "design_results": {
+                "per_girder": {
+                    "G1": {
+                        "checks": [
+                            {"check_id": 1, "name": "Girder Moment", "dcr": 0.85, "status": "PASS"},
+                            {"check_id": 9, "name": "Fatigue Normal Stress", "dcr": 2.26, "status": "FAIL"},
+                        ]
+                    }
+                }
+            },
+            "deck_design_results": {"ur_bot_uls": 0.72},
+            "crossbracing_design_results": {
+                "G1-G2": {
+                    "diagonal": {
+                        "compression": {"raw": {"efficiency": 0.65, "capacity_kN": 500.0, "status": "PASS"}},
+                    }
+                }
+            },
+            "end_diaphragm_design_results": {
+                "G1-G2": {
+                    "diagonal": {
+                        "compression": {"raw": {"efficiency": 0.55, "capacity_kN": 600.0, "status": "PASS"}},
+                    }
+                }
+            },
+        }
+
+        tex = executive_summary(input_dict, output_dict, {})
+
+        # Units in project overview
+        self.assertIn("30 m", tex)
+        self.assertIn("22 m", tex)
+        self.assertIn("2.29 m", tex)
+        self.assertIn("250 mm", tex)
+
+        # Status reconciliation
+        self.assertIn("FAIL", tex)
+        self.assertIn("Fatigue Normal Stress", tex)
+        self.assertIn("2.26", tex)
+
+        # Key outcomes summary: Girder fail, not hardcoded pass!
+        self.assertIn("Girder design fail", tex)
+        self.assertIn("Deck design pass", tex)
+        self.assertIn("Cross bracing design pass", tex)
+        self.assertIn("End Diaphragm design pass", tex)
 
 
 if __name__ == "__main__":

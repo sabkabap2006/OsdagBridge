@@ -370,7 +370,7 @@ def _update_design_options_cont_defaults(input_dict: dict) -> None:
     _update(KEY_DO_GAMMA_S,            "1.15")
     _update(KEY_DO_GAMMA_V,            "1.25")
     _update(KEY_DO_GAMMA_FLT,          "1.00")
-    _update(KEY_DO_GAMMA_MF,           "1.35")
+    _update(KEY_DO_GAMMA_MF,           "1.25")
     _update(KEY_DO_LOAD_CYCLES,        "2000000")
     _update(KEY_DO_CAMBER_MODE,        "Default")
     _update(KEY_DO_ULS_BENDING,        True)

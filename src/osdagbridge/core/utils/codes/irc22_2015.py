@@ -1241,7 +1241,7 @@ class IRC22_2014:
             f_MPa,                     # actual fatigue stress range (MPa)
             Nsc=None,                  # no. of stress cycles 
             section_type=KEY_SECTION_FABRICATION[1],     # "welded" or "rolled"
-            gamma_mft=1.35,            # γ_mft = partial safety factor for fatigue strength (Table 3)
+            gamma_mft=1.25,            # γ_mft = partial safety factor for fatigue strength (Table 3)
             gamma_ff=1.0               # γ_ff  = partial safety factor for fatigue actions/effects (usually 1.0)
         ):
         """
@@ -1408,7 +1408,7 @@ class IRC22_2014:
         ff,                 # Normal fatigue strength range for NSC (from 605.3)
         tf,                 # Shear fatigue strength range for NSC (from 605.3)
         mu_r=1.0,           # Capacity reduction factor (605.2), default 1.0
-        gamma_mft=1.35,     # Partial safety factor for fatigue strength (Table 3)
+        gamma_mft=1.25,     # Partial safety factor for fatigue strength (Table 3)
         fy=None,            # Yield stress of steel (MPa)
 
         # Stress RANGE values (constant stress range assumption)

@@ -1,8 +1,6 @@
 from typing import List
-
-from osdagbridge.core.utils.common import (
-    KEY_DESIGN_MODE
-)
+from osdagbridge.core.utils.common import KEY_DESIGN_MODE, KEY_DO_GAMMA_MF
+from osdagbridge.core.reports.styles import TableStyles
 
 
 def ch8_design_log(log_entries: List[str], input_dict: dict) -> str:
@@ -23,10 +21,10 @@ def ch8_design_log(log_entries: List[str], input_dict: dict) -> str:
                 upper = line.upper()
                 if 'WARNING' in upper:
                     lines_tex.append(
-                        rf'\textcolor{{blue}}{{{escaped}}}\\')
+                        rf'\textcolor{{osdagWarn}}{{{escaped}}}\\')
                 elif 'ERROR' in upper:
                     lines_tex.append(
-                        rf'\textcolor{{red}}{{{escaped}}}\\')
+                        rf'\textcolor{{osdagFail}}{{{escaped}}}\\')
                 elif 'INFO' in upper:
                     lines_tex.append(
                         rf'\textcolor{{osdagGreen}}{{{escaped}}}\\')
@@ -35,10 +33,12 @@ def ch8_design_log(log_entries: List[str], input_dict: dict) -> str:
 
     mode = str(input_dict.get(KEY_DESIGN_MODE, 'Optimized')).strip().lower()
     is_custom = mode in {'custom', 'customized'}
-    return _ch8_assumptions(is_custom)
+    return _ch8_assumptions(is_custom, input_dict)
 
 
-def _ch8_assumptions(is_custom: bool) -> str:
+def _ch8_assumptions(is_custom: bool, input_dict: dict = None) -> str:
+    input_dict = input_dict or {}
+    gamma_mft_str = str(input_dict.get(KEY_DO_GAMMA_MF, "1.25") or "1.25")
     assumptions = [
         r"""
 \chapter{Standards \& Assumptions}
@@ -56,7 +56,9 @@ form the basis of all design calculations in this software.
 \vspace{0.5cm}
 
 \begingroup
-\setlength{\tabcolsep}{3.5pt}
+\setlength{\tabcolsep}{""" + TableStyles.TABCOLSEP_COMPACT + r"""}
+\setlength{\LTleft}{""" + TableStyles.LT_LEFT_ALIGN + r"""}
+\setlength{\LTright}{""" + TableStyles.LT_RIGHT_ALIGN + r"""}
 \begin{longtable}{|C{2.6cm}|C{1.6cm}|p{11.8cm}|}
 \caption{\textbf{IRC Codes}}\\
 \hline
@@ -67,6 +69,10 @@ form the basis of all design calculations in this software.
 \textbf{Code} & \textbf{Year} & \textbf{Title / Scope} \\ 
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 IRC 5 & 2015 & General Features of Design - carriageway widths, kerb, footpath dimensions \\ 
 \hline
 IRC 6 & 2017 & Loads and Load Combinations - dead load, live load, impact, wind, temperature, etc. \\ 
@@ -83,7 +89,9 @@ IRC SP 114 & 2018 & Seismic Design of Road Bridges \\
 \endgroup
 
 \begingroup
-\setlength{\tabcolsep}{3.5pt}
+\setlength{\tabcolsep}{""" + TableStyles.TABCOLSEP_COMPACT + r"""}
+\setlength{\LTleft}{""" + TableStyles.LT_LEFT_ALIGN + r"""}
+\setlength{\LTright}{""" + TableStyles.LT_RIGHT_ALIGN + r"""}
 \begin{longtable}{|C{2.6cm}|C{1.6cm}|p{11.8cm}|}
 \caption{\textbf{IS Codes}}\\
 \hline
@@ -94,6 +102,10 @@ IRC SP 114 & 2018 & Seismic Design of Road Bridges \\
 \textbf{Code} & \textbf{Year} & \textbf{Scope} \\
 \hline
 \endhead
+\hline
+\endfoot
+\hline
+\endlastfoot
 IS 800 & 2007 & Steel construction - tension, compression, bending, shear, LTB, stiffeners, combined checks \\
 \hline
 IS 456 & 2000 & Concrete - simplified stress-block for deck moment capacity \\
@@ -142,14 +154,15 @@ IS 2062 & 2011 & Structural steel - yield and ultimate strength by grade \\
 \item Default reinforcement grade: Fe500.
 \end{itemize}
 
-\textbf{Partial Safety Factors (IRC 22:2015 Cl.601.4)}
+\textbf{Partial Safety Factors (IRC 22:2015 Cl.601.4, IS 800:2007 Table 4)}
 
 \begin{itemize}
 \item $\gamma_{m0}$ (steel yield, ULS) = 1.10
 \item $\gamma_{m1}$ (steel ultimate, ULS) = 1.25
 \item Reinforcement (ULS) = 1.15
 \item Welds -- shop: 1.25; field: 1.50
-\item Fatigue ($\gamma_{mft}$) = 1.35
+\item Fatigue material factor ($\gamma_{Mft}$, IRC 22 Table 6.1 / IS 800 Table 4) = """ + gamma_mft_str + r""" (applied to detail resistance)
+\item Fatigue load factor ($\gamma_{flt}$, IRC 6 Cl. 202.3) = 1.00 (applied to cyclic live load actions)
 \end{itemize}
 
 \textbf{Loading}

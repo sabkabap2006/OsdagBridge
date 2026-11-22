@@ -1,4 +1,5 @@
 from osdagbridge.core.reports.report_utils import _tex
+from osdagbridge.core.reports.styles import TableStyles
 
 
 def ch1_project_info(m):
@@ -10,6 +11,8 @@ This section records all project metadata as entered by the designer.
 \section{Project and Design Team Details}
 \label{sec:project-details}
 
+\begingroup
+\setlength{\tabcolsep}{""" + TableStyles.TABCOLSEP_DEFAULT + r"""}
 \begin{tabular}{|L{5.5cm}|L{8.5cm}|}
 \hline
 \textbf{Project Name} & """ + _tex(m.project_name) + r""" \\
@@ -27,6 +30,7 @@ This section records all project metadata as entered by the designer.
 \textbf{Software Version} & OsdagBridge \\
 \hline
 \end{tabular}
+\endgroup
 
 
 \section{Applicable Codes and Standards}

@@ -67,6 +67,8 @@ def extract_design_utilization_ratios(bridge: Any) -> Dict[str, Any]:
         13: ("Girder Deflection (Live)", "mm"),
         14: ("Girder Deflection (Total)", "mm"),
         16: ("Transverse Shear", "kN/m"),
+        20: ("Intermediate Stiffener", "mm"),
+        21: ("Bearing Stiffener", "mm"),
     }
     
     for g, gd in pg_results.items():
@@ -76,10 +78,16 @@ def extract_design_utilization_ratios(bridge: Any) -> Dict[str, Any]:
         girder_checks[g_name] = {}
         
         for chk in (gd.get("checks") or []):
-            cid = chk.get("check_id")
-            if cid not in CHECK_NAMES:
+            cid = chk.get("check_id") if chk.get("check_id") is not None else chk.get("id")
+            cname = str(chk.get("name") or chk.get("label") or "").lower()
+            if cid in CHECK_NAMES:
+                lbl, def_unit = CHECK_NAMES[cid]
+            elif "intermediate stiffener" in cname or ("stiffener" in cname and ("spacing" in cname or "intermediate" in cname)):
+                lbl, def_unit = ("Intermediate Stiffener", "mm")
+            elif "bearing stiffener" in cname:
+                lbl, def_unit = ("Bearing Stiffener", "mm")
+            else:
                 continue
-            lbl, def_unit = CHECK_NAMES[cid]
             dem = chk.get("demand")
             cap = chk.get("capacity")
             dcr = chk.get("dcr")
@@ -211,7 +219,7 @@ def extract_design_utilization_ratios(bridge: Any) -> Dict[str, Any]:
                 dem_c = ur_c * cap_c
                 if best_comp is None or ur_c > best_comp["ur"]:
                     best_comp = {
-                        "label": f"Bracing Comp. ({pair})",
+                        "label": f"Cross Bracing Comp. ({pair})",
                         "demand": round(dem_c, 2),
                         "capacity": round(cap_c, 2),
                         "ur": round(ur_c, 3),
@@ -229,7 +237,7 @@ def extract_design_utilization_ratios(bridge: Any) -> Dict[str, Any]:
                 dem_t = ur_t * cap_t
                 if best_tens is None or ur_t > best_tens["ur"]:
                     best_tens = {
-                        "label": f"Bracing Tens. ({pair})",
+                        "label": f"Cross Bracing Tens. ({pair})",
                         "demand": round(dem_t, 2),
                         "capacity": round(cap_t, 2),
                         "ur": round(ur_t, 3),
@@ -246,7 +254,7 @@ def extract_design_utilization_ratios(bridge: Any) -> Dict[str, Any]:
                 ur_s = sf / lim
                 if best_slend is None or ur_s > best_slend["ur"]:
                     best_slend = {
-                        "label": f"Bracing Slenderness ({pair})",
+                        "label": f"Cross Bracing Slenderness ({pair})",
                         "demand": round(sf, 1),
                         "capacity": round(lim, 1),
                         "ur": round(ur_s, 3),
@@ -262,7 +270,77 @@ def extract_design_utilization_ratios(bridge: Any) -> Dict[str, Any]:
     if best_slend:
         bracing_checks.append(best_slend)
 
-    # ── 4. Aggregate Overall Controlling Checks ──────────────────────────────
+    # ── 4. End Diaphragm Checks ──────────────────────────────────────────────
+    end_diaphragm_checks: List[Dict[str, Any]] = []
+    ed_results = output_dict.get("end_diaphragm_design_results", {}) or {}
+
+    if isinstance(ed_results, dict) and ed_results:
+        best_ed_comp = None
+        best_ed_tens = None
+        best_ed_slend = None
+
+        for pair, members in ed_results.items():
+            if not isinstance(members, dict):
+                continue
+            for member, force_types in members.items():
+                if not isinstance(force_types, dict):
+                    continue
+                for ft, raw in force_types.items():
+                    try:
+                        from osdagbridge.core.bridge_types.plate_girder.results_data import _extract_osdag_summary
+                        summary = _extract_osdag_summary(raw or {})
+                    except Exception:
+                        summary = raw if isinstance(raw, dict) else {}
+
+                    eff = summary.get("efficiency")
+                    cap = summary.get("capacity_kN") or summary.get("capacity")
+                    slend = summary.get("slenderness")
+
+                    if eff is not None:
+                        try:
+                            ur_e = float(eff)
+                            cap_val = float(cap) if cap is not None else 1.0
+                            dem_val = ur_e * cap_val
+                            item = {
+                                "label": f"End Diaphragm {ft.capitalize()} ({pair})",
+                                "demand": round(dem_val, 2) if cap is not None else None,
+                                "capacity": round(cap_val, 2) if cap is not None else None,
+                                "ur": round(ur_e, 3),
+                                "unit": "kN" if cap is not None else "-"
+                            }
+                            if str(ft).lower() == "compression":
+                                if best_ed_comp is None or ur_e > best_ed_comp["ur"]:
+                                    best_ed_comp = item
+                            else:
+                                if best_ed_tens is None or ur_e > best_ed_tens["ur"]:
+                                    best_ed_tens = item
+                        except (TypeError, ValueError):
+                            pass
+
+                    if slend is not None:
+                        try:
+                            sf = float(slend)
+                            lim = 400.0 if "chord" in str(member).lower() else 250.0
+                            ur_s = sf / lim
+                            if best_ed_slend is None or ur_s > best_ed_slend["ur"]:
+                                best_ed_slend = {
+                                    "label": f"End Diaphragm Slenderness ({pair})",
+                                    "demand": round(sf, 1),
+                                    "capacity": round(lim, 1),
+                                    "ur": round(ur_s, 3),
+                                    "unit": "-"
+                                }
+                        except (TypeError, ValueError):
+                            pass
+
+        if best_ed_comp:
+            end_diaphragm_checks.append(best_ed_comp)
+        if best_ed_tens:
+            end_diaphragm_checks.append(best_ed_tens)
+        if best_ed_slend:
+            end_diaphragm_checks.append(best_ed_slend)
+
+    # ── 5. Aggregate Overall Controlling Checks (All 4 Components) ───────────
     overall: List[Dict[str, Any]] = []
 
     for lbl, (ur, dem, cap, unit, g_name) in governing_girder_checks.items():
@@ -295,11 +373,22 @@ def extract_design_utilization_ratios(bridge: Any) -> Dict[str, Any]:
             "component": "Cross Bracing"
         })
 
+    for ed in end_diaphragm_checks:
+        overall.append({
+            "label": ed["label"],
+            "demand": ed.get("demand"),
+            "capacity": ed.get("capacity"),
+            "ur": ed["ur"],
+            "unit": ed.get("unit", ""),
+            "component": "End Diaphragm"
+        })
+
     return {
         "overall": overall,
         "girders": girder_checks,
         "deck": deck_checks,
-        "bracing": bracing_checks
+        "bracing": bracing_checks,
+        "end_diaphragm": end_diaphragm_checks
     }
 
 
@@ -388,10 +477,13 @@ def plot_girder_ur_chart(girder_checks: Dict[str, Dict[str, tuple]], output_path
         return None
         
     PRIMARY_CHECKS = [
-        ("Girder Moment",     "#1976D2"),
-        ("Girder Shear",      "#388E3C"),
-        ("Girder LTB",        "#7B1FA2"),
-        ("Girder Deflection", "#F57C00"),
+        ("Girder Moment",           "#1976D2"),
+        ("Girder Shear",            "#388E3C"),
+        ("Girder LTB",              "#7B1FA2"),
+        ("Girder Deflection",       "#F57C00"),
+        ("Girder Fatigue (Normal)", "#C2185B"),
+        ("Girder Stress",           "#0288D1"),
+        ("Girder Fatigue (Shear)",  "#8D6E63"),
     ]
     
     active_checks = []
@@ -407,7 +499,7 @@ def plot_girder_ur_chart(girder_checks: Dict[str, Dict[str, tuple]], output_path
     n_bars = len(active_checks)
     bar_width = 0.75 / n_bars
     
-    fig, ax = plt.subplots(figsize=(9.5, 4.4), dpi=200)
+    fig, ax = plt.subplots(figsize=(10.0, 4.6), dpi=200)
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
     
@@ -425,7 +517,9 @@ def plot_girder_ur_chart(girder_checks: Dict[str, Dict[str, tuple]], output_path
         bars = ax.bar(x + offset, check_urs, width=bar_width * 0.9, label=chk_name, color=col, edgecolor="#212121", linewidth=0.6, zorder=3)
         for b, u in zip(bars, check_urs):
             if u > 0:
-                ax.text(b.get_x() + b.get_width() / 2.0, u + 0.02, f"{u:.2f}", ha="center", va="bottom", fontsize=7.5, zorder=6)
+                txt_color = "#B71C1C" if u > 1.0 else "#212121"
+                fw = "bold" if u > 0.90 else "normal"
+                ax.text(b.get_x() + b.get_width() / 2.0, u + 0.02, f"{u:.2f}", ha="center", va="bottom", fontsize=7.5, color=txt_color, fontweight=fw, zorder=6)
                 
     # Red dashed reference line at UR = 1.0
     ax.axhline(1.0, color="#D32F2F", linestyle="--", linewidth=1.5, zorder=5, label="UR = 1.0 (Limit)")
@@ -450,25 +544,42 @@ def plot_girder_ur_chart(girder_checks: Dict[str, Dict[str, tuple]], output_path
     return output_path
 
 
-def plot_deck_bracing_ur_chart(deck_checks: List[Dict[str, Any]], bracing_checks: List[Dict[str, Any]], output_path: str) -> Optional[str]:
-    """Generate concrete deck slab and transverse bracing utilization ratio chart."""
-    combined = deck_checks + bracing_checks
+def plot_deck_bracing_ur_chart(
+    deck_checks: List[Dict[str, Any]],
+    bracing_checks: List[Dict[str, Any]],
+    end_diaphragm_checks: Optional[List[Dict[str, Any]]] = None,
+    output_path: str = ""
+) -> Optional[str]:
+    """Generate concrete deck slab, cross bracing, and end diaphragm utilization ratio chart."""
+    combined = deck_checks + bracing_checks + (end_diaphragm_checks or [])
     if not combined:
         return None
         
     labels = [c["label"] for c in combined]
     urs = [c["ur"] for c in combined]
     
+    # Assign distinct colors per component group, with failing checks highlighted in red
+    deck_set = set(id(c) for c in deck_checks)
+    bracing_set = set(id(c) for c in bracing_checks)
+    
+    COLOR_DECK = "#1976D2"         # Blue for Deck Slab
+    COLOR_BRACING = "#00897B"      # Teal for Cross Bracing
+    COLOR_DIAPHRAGM = "#7B1FA2"    # Purple for End Diaphragms
+    COLOR_FAIL = "#D32F2F"         # Red for Exceeding Limit
+    
     colors = []
-    for u in urs:
+    for c in combined:
+        u = c["ur"]
         if u > 1.0:
-            colors.append("#D32F2F")
-        elif u > 0.85:
-            colors.append("#F57C00")
+            colors.append(COLOR_FAIL)
+        elif id(c) in deck_set:
+            colors.append(COLOR_DECK)
+        elif id(c) in bracing_set:
+            colors.append(COLOR_BRACING)
         else:
-            colors.append("#00897B")  # Teal
+            colors.append(COLOR_DIAPHRAGM)
             
-    fig, ax = plt.subplots(figsize=(9.5, 4.4), dpi=200)
+    fig, ax = plt.subplots(figsize=(10.5, 4.8), dpi=200)
     fig.patch.set_facecolor("white")
     ax.set_facecolor("white")
     
@@ -476,11 +587,13 @@ def plot_deck_bracing_ur_chart(deck_checks: List[Dict[str, Any]], bracing_checks
     bars = ax.bar(x, urs, width=0.55, color=colors, edgecolor="#212121", linewidth=0.8, zorder=3)
     
     # Red dashed reference line at UR = 1.0
-    ax.axhline(1.0, color="#D32F2F", linestyle="--", linewidth=1.5, zorder=5, label="UR = 1.0 (Limit)")
+    ax.axhline(1.0, color="#D32F2F", linestyle="--", linewidth=1.6, zorder=5, label="UR = 1.0 (Allowable Limit)")
     
     for bar, u in zip(bars, urs):
         h = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width() / 2.0, h + 0.02, f"{u:.2f}", ha="center", va="bottom", fontsize=8.5, zorder=6)
+        txt_color = "#B71C1C" if u > 1.0 else "#212121"
+        fw = "bold" if u > 0.90 else "normal"
+        ax.text(bar.get_x() + bar.get_width() / 2.0, h + 0.02, f"{u:.2f}", ha="center", va="bottom", fontsize=8.5, color=txt_color, fontweight=fw, zorder=6)
         
     ax.set_xticks(list(x))
     ax.set_xticklabels(labels, rotation=35, ha="right", fontsize=9, fontweight="medium")
@@ -488,14 +601,28 @@ def plot_deck_bracing_ur_chart(deck_checks: List[Dict[str, Any]], bracing_checks
     y_max = max(1.20, max(urs) * 1.18)
     ax.set_ylim(0.0, y_max)
     ax.set_ylabel(r"Utilization Ratio, $UR = \frac{\mathrm{Demand}}{\mathrm{Capacity}}$", fontsize=10, fontweight="bold")
-    ax.set_title("Reinforced Concrete Deck Slab and Bracing Utilization Ratios", fontsize=11, fontweight="bold", pad=12)
+    ax.set_title("Deck Slab, Cross Bracing, and End Diaphragm Utilization Ratios", fontsize=11, fontweight="bold", pad=12)
     
     ax.yaxis.grid(True, linestyle=":", alpha=0.6, color="#BDBDBD", zorder=0)
     ax.set_axisbelow(True)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color("#616161")
+    ax.spines["bottom"].set_color("#616161")
     
-    ax.legend(loc="upper right", framealpha=0.9, fontsize=8.5)
+    legend_elements = [
+        Line2D([0], [0], color="#D32F2F", linestyle="--", linewidth=1.6, label="Allowable Limit (UR = 1.0)"),
+    ]
+    if deck_checks:
+        legend_elements.append(Patch(facecolor=COLOR_DECK, edgecolor="#212121", label="Concrete Deck Slab"))
+    if bracing_checks:
+        legend_elements.append(Patch(facecolor=COLOR_BRACING, edgecolor="#212121", label="Cross Bracing"))
+    if end_diaphragm_checks:
+        legend_elements.append(Patch(facecolor=COLOR_DIAPHRAGM, edgecolor="#212121", label="End Diaphragms"))
+    if any(u > 1.0 for u in urs):
+        legend_elements.append(Patch(facecolor=COLOR_FAIL, edgecolor="#212121", label="Exceeds Limit (UR > 1.0)"))
+        
+    ax.legend(handles=legend_elements, loc="upper right", framealpha=0.9, fontsize=8.5)
     plt.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -512,22 +639,22 @@ def generate_all_ur_charts(bridge: Any, images_dir: str) -> Dict[str, str]:
     
     paths: Dict[str, str] = {}
     
-    # 1. Overall Governing UR Chart
+    # 1. Overall Governing UR Chart (covers all 4 components)
     if data["overall"]:
         p1 = os.path.join(images_dir, "ur_chart_overall.png")
         if plot_overall_ur_chart(data["overall"], p1):
             paths["ur_chart_overall"] = p1
             
-    # 2. Girder Limit States UR Chart
+    # 2. Girder Limit States UR Chart (covers Steel Plate Girders)
     if data["girders"]:
         p2 = os.path.join(images_dir, "ur_chart_girders.png")
         if plot_girder_ur_chart(data["girders"], p2):
             paths["ur_chart_girders"] = p2
             
-    # 3. Deck and Bracing UR Chart
-    if data["deck"] or data["bracing"]:
+    # 3. Deck, Cross Bracing, and End Diaphragms UR Chart
+    if data["deck"] or data["bracing"] or data.get("end_diaphragm"):
         p3 = os.path.join(images_dir, "ur_chart_deck_bracing.png")
-        if plot_deck_bracing_ur_chart(data["deck"], data["bracing"], p3):
+        if plot_deck_bracing_ur_chart(data["deck"], data["bracing"], data.get("end_diaphragm"), p3):
             paths["ur_chart_deck_bracing"] = p3
             
     return paths

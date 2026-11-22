@@ -198,14 +198,22 @@ def plot_steel_tonnage_chart(steel_data: dict, output_path: str) -> Optional[str
     ax.spines["left"].set_color("#616161")
     ax.spines["bottom"].set_color("#616161")
 
-    # Legend indicating components
+    # Legend placed cleanly above the plotting area to eliminate bar overlap
     legend_elements = [
         Patch(facecolor="#1976D2", edgecolor="#212121", label=f"Plate Girders ({g_wt:.2f} MT)"),
         Patch(facecolor="#00897B", edgecolor="#212121", label=f"Cross Bracing ({cb_wt:.2f} MT)"),
         Patch(facecolor="#43A047", edgecolor="#212121", label=f"End Diaphragms ({ed_wt:.2f} MT)"),
         Patch(facecolor="#37474F", edgecolor="#212121", linestyle="--", label=f"Total Tonnage ({tot_wt:.2f} MT)"),
     ]
-    ax.legend(handles=legend_elements, loc="upper left", framealpha=0.92, fontsize=8.5)
+    ax.legend(
+        handles=legend_elements,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.05),
+        ncol=2,
+        frameon=True,
+        framealpha=0.95,
+        fontsize=8.5
+    )
 
     plt.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight", facecolor="white")

@@ -14,7 +14,10 @@ from collections import OrderedDict
 from collections.abc import Mapping
 from pathlib import Path
 
-import openseespy.opensees as ops
+try:
+    import openseespy.opensees as ops
+except ImportError:
+    ops = None
 
 from .results_data_post_processing import post_process, FORCE_KEEP, DISP_KEEP
 
@@ -623,6 +626,11 @@ def _dump_crossbracing(data: dict) -> None:
 def _extract_osdag_summary(result: dict) -> dict:
     if not result:
         return {}
+    if isinstance(result.get("raw"), dict):
+        r_copy = dict(result.get("raw"))
+        r_copy.update({k: v for k, v in result.items() if k != "raw"})
+        result = r_copy
+
     def _first(*keys):
         for k in keys:
             v = result.get(k)
@@ -631,11 +639,11 @@ def _extract_osdag_summary(result: dict) -> dict:
         return None
 
     return {
-        "section":     _first("section_size.designation", "Optimum.Designation"),
-        "capacity_kN": _first("Member.tension_capacity",  "Design.Strength"),
-        "efficiency":  _first("Member.efficiency",        "Optimum.UR"),
-        "slenderness": result.get("Member.Slenderness"),
-        "connection":  "Welded" if "Weld.Type" in result else "Bolted",
+        "section":     _first("section_size.designation", "Optimum.Designation", "section", "Designation"),
+        "capacity_kN": _first("Member.tension_capacity",  "Design.Strength", "capacity_kN", "capacity", "Capacity"),
+        "efficiency":  _first("Member.efficiency",        "Optimum.UR", "efficiency", "ur", "UR"),
+        "slenderness": _first("Member.Slenderness", "slenderness", "Slenderness"),
+        "connection":  "Welded" if ("Weld.Type" in result or str(result.get("connection", "")).lower() == "welded") else "Bolted",
     }
 
 

@@ -91,11 +91,52 @@ class SectionCatalog:
     def list_channels(self) -> List[str]:
         return sorted(self._channels.keys())
 
+    @staticmethod
+    def _normalize_key(key: str) -> str:
+        s = str(key).upper().replace("ISA", "").replace("IS", "").replace("∠", "").strip()
+        for ch in ["X", "×", "ⅹ", "*"]:
+            s = s.replace(ch, "x")
+        return "".join(s.split())
+
     def get_angle(self, designation: str) -> Optional[AngleSection]:
-        return self._angles.get(designation.strip())
+        if not designation:
+            return None
+        raw = designation.strip()
+        if raw in self._angles:
+            return self._angles[raw]
+        norm = self._normalize_key(raw)
+        for des, ang in self._angles.items():
+            if self._normalize_key(des) == norm:
+                return ang
+        # Fallback parsing for geometric designations like "ISA 100x100x10" or "100x100x10"
+        import re
+        nums = re.findall(r"\d+(?:\.\d+)?", raw)
+        if len(nums) >= 3:
+            try:
+                a_f, b_f, t_f = float(nums[0]), float(nums[1]), float(nums[2])
+                return AngleSection(
+                    designation=raw,
+                    a=a_f,
+                    b=b_f,
+                    t=t_f,
+                    r1=max(t_f * 0.8, 2.0),
+                    r2=0.0
+                )
+            except Exception:
+                pass
+        return None
 
     def get_channel(self, designation: str) -> Optional[ChannelSection]:
-        return self._channels.get(designation.strip())
+        if not designation:
+            return None
+        raw = designation.strip()
+        if raw in self._channels:
+            return self._channels[raw]
+        norm = self._normalize_key(raw)
+        for des, ch in self._channels.items():
+            if self._normalize_key(des) == norm:
+                return ch
+        return None
 
 
 class SectionPreviewWidget(QWidget):

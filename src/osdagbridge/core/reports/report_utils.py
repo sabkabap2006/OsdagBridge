@@ -1,3 +1,5 @@
+import re
+from osdagbridge.core.reports.styles import render_pylatex_figure
 from osdagbridge.core.utils.common import (
     KEY_MP_GD_MEMBER_ID,
     KEY_MP_GD_SELECT_GIRDER,
@@ -30,6 +32,23 @@ def _render_value(source_dict, key, unit=""):
     if val in ("", None):
         return ""
     return _tex(val) + unit
+
+
+def _format_latex_label(text):
+    """Format a label or check name for LaTeX, escaping text outside math mode ($...$)
+    while preserving embedded LaTeX math expressions (e.g. $b_s \\le 14 t_q \\varepsilon$) intact."""
+    if not text:
+        return ""
+    s = str(text)
+    # Split keeping delimiters ($...$)
+    parts = re.split(r'(\$[^\$]*\$)', s)
+    result = []
+    for part in parts:
+        if part.startswith('$') and part.endswith('$') and len(part) >= 2:
+            result.append(part)
+        else:
+            result.append(_tex(part))
+    return "".join(result)
 
 
 def get_girder_entries(input_dict):
@@ -78,12 +97,7 @@ def _fig_or_placeholder(path, caption, width=r'0.9\textwidth', height=r'7.5cm'):
     path is the relative path as pdflatex will see it (e.g. 'assets/plan.png').
     """
     if path:
-        p = path.replace('\\', '/')
-        return (r'\begin{figure}[H]' + '\n'
-                r'\centering' + '\n'
-                r'\includegraphics[width=' + width + ',height=' + height + ',keepaspectratio]{' + p + '}\n'
-                r'\caption*{' + caption + '}\n'
-                r'\end{figure}')
+        return render_pylatex_figure(path, caption=caption, width=width, height=height, starred_caption=True)
     return (r'\begin{figure}[H]' + '\n'
             r'\centering' + '\n'
             r'\fbox{\parbox[c][3cm][c]{0.95\textwidth}{' + '\n'
@@ -95,18 +109,7 @@ def _fig_or_placeholder(path, caption, width=r'0.9\textwidth', height=r'7.5cm'):
 def _fig_embed(path, caption, width=r'\textwidth', height=None):
     """Embed a real figure when path is provided (already copied); otherwise use an fbox placeholder."""
     if path:
-        p = path.replace('\\', '/')
-        opts = 'width=' + width
-        if height:
-            opts += ',height=' + height + ',keepaspectratio'
-        return (r'\begin{figure}[H]' + '\n'
-                r'\vspace{-0.5em}' + '\n'
-                r'\centering' + '\n'
-                r'\includegraphics[' + opts + ']{' + p + '}\n'
-                r'\vspace{0.5em}' + '\n'
-                r'\caption*{\small ' + caption + '}\n'
-                r'\vspace{-0.5em}' + '\n'
-                r'\end{figure}')
+        return render_pylatex_figure(path, caption=caption, width=width, height=height, starred_caption=True)
     # fbox placeholder — matches template exactly
     return (r'\noindent\fbox{\parbox{0.97\textwidth}{' + '\n'
             r'\textit{[ PLACEHOLDER: ' + caption + r' ]}' + '\n'

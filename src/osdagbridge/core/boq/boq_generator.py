@@ -11,12 +11,60 @@ from osdagbridge.core.utils.common import (
     KEY_TS_NO_OF_GIRDERS,
     KEY_TS_DECK_THICKNESS,
     KEY_TS_GIRDER_SPACING,
+    KEY_MP_GIRDER_DEPTH,
+    KEY_MP_GIRDER_WEB_THICKNESS,
+    KEY_MP_GIRDER_TOP_FLANGE_WIDTH,
+    KEY_MP_GIRDER_TOP_FLANGE_THICKNESS,
+    KEY_MP_GIRDER_BOTTOM_FLANGE_WIDTH,
+    KEY_MP_GIRDER_BOTTOM_FLANGE_THICKNESS,
+    KEY_CB_TYPE,
+    KEY_CB_LOAD,
 )
 
 logger = logging.getLogger("osdagbridge.core.boq_generator")
 
 
-def resolve_girder_value(source: dict, base_key: str, i: int = 0) -> Any:
+def get_angle_section_properties(designation: str) -> tuple[float, float]:
+    """Look up the cross-sectional area (cm²) and minimum radius of gyration (cm) of a structural angle."""
+    if not designation:
+        return (0.0, 0.0)
+    raw = str(designation).upper().replace("ISA", "").strip()
+    try:
+        from osdagbridge.core.utils.common import _DB_PATH
+        import sqlite3
+        if _DB_PATH and _DB_PATH.exists():
+            with sqlite3.connect(str(_DB_PATH)) as conn:
+                cur = conn.cursor()
+                norm = raw.replace(" ", "").replace("X", "*")
+                cur.execute(
+                    "SELECT Area, rvmin FROM Angles WHERE REPLACE(REPLACE(UPPER(Designation), ' ', ''), 'X', '*') = ?",
+                    (norm,)
+                )
+                row = cur.fetchone()
+                if row and row[0]:
+                    return (float(row[0]), float(row[1]) if row[1] is not None else 0.0)
+    except Exception as e:
+        logger.debug(f"SQLite lookup error for {designation}: {e}")
+
+    # Fallback to geometric approximation: (a + b - t) * t / 100 cm²
+    try:
+        parts = [float(p.strip()) for p in raw.replace("*", "x").replace("X", "x").split("x") if p.strip()]
+        if len(parts) >= 3:
+            a, b, t = parts[0], parts[1], parts[2]
+            area = (a + b - t) * t / 100.0
+            rv = 0.2 * min(a, b) / 10.0  # approximate rv ~ 0.2*b in cm
+            return (area, rv)
+    except Exception:
+        pass
+    return (0.0, 0.0)
+
+
+def get_angle_section_area_cm2(designation: str) -> float:
+    """Look up or approximate the cross-sectional area (cm²) of a structural angle."""
+    return get_angle_section_properties(designation)[0]
+
+
+def resolve_girder_value(source: dict, base_key: str, i: int = 0, default: Any = None) -> Any:
     """Resolve a girder property from an input/output dict, tolerating both the
     per-girder dynamic key scheme and the legacy scalar key.
     """
@@ -26,9 +74,9 @@ def resolve_girder_value(source: dict, base_key: str, i: int = 0) -> Any:
         f"{base_key}.G1.M1"
     ]
     for key in candidates:
-        if key in source:
+        if key in source and source[key] is not None:
             return source[key]
-    raise KeyError(base_key)
+    return default
 
 
 def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
@@ -36,65 +84,65 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
     needed for the material take-off summary (Chapter 7).
     """
     quantities = {
-        "steel_girders_vol_formula": r"\placeholder{Area $\times$ Length}",
-        "steel_girders_qty": "N.A.",
-        "steel_girders_vol_total": "N.A.",
-        "steel_girders_wt_single": "N.A.",
-        "steel_girders_wt_total": "N.A.",
+        "steel_girders_vol_formula": "---",
+        "steel_girders_qty": "---",
+        "steel_girders_vol_total": "---",
+        "steel_girders_wt_single": "---",
+        "steel_girders_wt_total": "---",
         
-        "steel_bracing_vol_formula": r"\placeholder{Area $\times$ Length}",
-        "steel_bracing_qty": "N.A.",
-        "steel_bracing_vol_total": "N.A.",
-        "steel_bracing_wt_single": "N.A.",
-        "steel_bracing_wt_total": "N.A.",
+        "steel_bracing_vol_formula": "---",
+        "steel_bracing_qty": "---",
+        "steel_bracing_vol_total": "---",
+        "steel_bracing_wt_single": "---",
+        "steel_bracing_wt_total": "---",
 
-        "bracing_top_vol_formula": r"\placeholder{Area $\times$ Length}",
-        "bracing_top_qty": "N.A.",
-        "bracing_top_vol_total": "N.A.",
-        "bracing_top_wt_single": "N.A.",
-        "bracing_top_wt_total": "N.A.",
+        "bracing_top_vol_formula": "---",
+        "bracing_top_qty": "---",
+        "bracing_top_vol_total": "---",
+        "bracing_top_wt_single": "---",
+        "bracing_top_wt_total": "---",
 
-        "bracing_bot_vol_formula": r"\placeholder{Area $\times$ Length}",
-        "bracing_bot_qty": "N.A.",
-        "bracing_bot_vol_total": "N.A.",
-        "bracing_bot_wt_single": "N.A.",
-        "bracing_bot_wt_total": "N.A.",
+        "bracing_bot_vol_formula": "---",
+        "bracing_bot_qty": "---",
+        "bracing_bot_vol_total": "---",
+        "bracing_bot_wt_single": "---",
+        "bracing_bot_wt_total": "---",
 
-        "bracing_diag_vol_formula": r"\placeholder{Area $\times$ Length}",
-        "bracing_diag_qty": "N.A.",
-        "bracing_diag_vol_total": "N.A.",
-        "bracing_diag_wt_single": "N.A.",
-        "bracing_diag_wt_total": "N.A.",
+        "bracing_diag_vol_formula": "---",
+        "bracing_diag_qty": "---",
+        "bracing_diag_vol_total": "---",
+        "bracing_diag_wt_single": "---",
+        "bracing_diag_wt_total": "---",
 
-        "ed_vol_formula": r"\placeholder{Area $\times$ Length}",
-        "ed_qty": "N.A.",
-        "ed_vol_total": "N.A.",
-        "ed_wt_single": "N.A.",
-        "ed_wt_total": "N.A.",
+        "ed_vol_formula": "---",
+        "ed_qty": "---",
+        "ed_vol_total": "---",
+        "ed_wt_single": "---",
+        "ed_wt_total": "---",
         
-        "concrete_deck_vol_formula": r"\placeholder{Width $\times$ Thickness $\times$ Length}",
-        "concrete_deck_qty": "N.A.",
-        "concrete_deck_vol_total": "N.A.",
-        "concrete_deck_wt_single": "N.A.",
-        "concrete_deck_wt_total": "N.A.",
+        "concrete_deck_vol_formula": "---",
+        "concrete_deck_qty": "---",
+        "concrete_deck_vol_total": "---",
+        "concrete_deck_wt_single": "---",
+        "concrete_deck_wt_total": "---",
         
-        "rebar_deck_vol_formula": r"\placeholder{Area $\times$ Length}",
-        "rebar_deck_qty": "N.A.",
-        "rebar_deck_vol_total": "N.A.",
-        "rebar_deck_wt_single": "N.A.",
-        "rebar_deck_wt_total": "N.A.",
+        "rebar_deck_vol_formula": "---",
+        "rebar_deck_qty": "---",
+        "rebar_deck_vol_total": "---",
+        "rebar_deck_wt_single": "---",
+        "rebar_deck_wt_total": "---",
         
-        "shear_studs_vol_formula": r"\placeholder{Area $\times$ Height}",
-        "shear_studs_qty": "N.A.",
-        "shear_studs_vol_total": "N.A.",
-        "shear_studs_wt_single": "N.A.",
-        "shear_studs_wt_total": "N.A.",
+        "shear_studs_vol_formula": "---",
+        "shear_studs_qty": "---",
+        "shear_studs_vol_total": "---",
+        "shear_studs_wt_single": "---",
+        "shear_studs_wt_total": "---",
 
-        "crash_barrier_vol_formula": r"\placeholder{Area $\times$ Length}",
-        "crash_barrier_qty": "N.A.",
-        "crash_barrier_vol_total": "N.A.",
-        "crash_barrier_wt_single": "N.A.",
-        "crash_barrier_wt_total": "N.A.",
+        "crash_barrier_vol_formula": "---",
+        "crash_barrier_qty": "---",
+        "crash_barrier_vol_total": "---",
+        "crash_barrier_wt_single": "---",
+        "crash_barrier_wt_total": "---",
     }
     try:
         span_val = inputs.get(KEY_SPAN) or inputs.get("span")
@@ -152,12 +200,19 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
         # Calculate from inputs if not in properties
         if girder_area <= 0:
             try:
-                dw_val = resolve_girder_value(inputs, "member_properties.girder_details.section_input.web_depth", 0)
-                tw_val = resolve_girder_value(inputs, "member_properties.girder_details.section_input.web_thickness", 0)
-                bft_val = resolve_girder_value(inputs, "member_properties.girder_details.section_input.top_flange_width", 0)
-                tft_val = resolve_girder_value(inputs, "member_properties.girder_details.section_input.top_flange_thickness", 0)
-                bfb_val = resolve_girder_value(inputs, "member_properties.girder_details.section_input.bottom_flange_width", 0)
-                tfb_val = resolve_girder_value(inputs, "member_properties.girder_details.section_input.bottom_flange_thickness", 0)
+                dw_val = (resolve_girder_value(inputs, KEY_MP_GIRDER_DEPTH, 0) or
+                          resolve_girder_value(inputs, "member_properties.girder_details.section_input.depth", 0) or
+                          resolve_girder_value(inputs, "member_properties.girder_details.section_input.web_depth", 0))
+                tw_val = (resolve_girder_value(inputs, KEY_MP_GIRDER_WEB_THICKNESS, 0) or
+                          resolve_girder_value(inputs, "member_properties.girder_details.section_input.web_thickness", 0))
+                bft_val = (resolve_girder_value(inputs, KEY_MP_GIRDER_TOP_FLANGE_WIDTH, 0) or
+                           resolve_girder_value(inputs, "member_properties.girder_details.section_input.top_flange_width", 0))
+                tft_val = (resolve_girder_value(inputs, KEY_MP_GIRDER_TOP_FLANGE_THICKNESS, 0) or
+                           resolve_girder_value(inputs, "member_properties.girder_details.section_input.top_flange_thickness", 0))
+                bfb_val = (resolve_girder_value(inputs, KEY_MP_GIRDER_BOTTOM_FLANGE_WIDTH, 0) or
+                           resolve_girder_value(inputs, "member_properties.girder_details.section_input.bottom_flange_width", 0))
+                tfb_val = (resolve_girder_value(inputs, KEY_MP_GIRDER_BOTTOM_FLANGE_THICKNESS, 0) or
+                           resolve_girder_value(inputs, "member_properties.girder_details.section_input.bottom_flange_thickness", 0))
                 
                 if (dw_val is not None and tw_val is not None and 
                     bft_val is not None and tft_val is not None and 
@@ -170,8 +225,11 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                     bfb = float(bfb_val)
                     tfb = float(tfb_val)
                     
-                    # All dimensions in mm, compute in m²
-                    girder_area = ((dw * tw) + (bft * tft) + (bfb * tfb)) / 1e6
+                    # Convert dimensions to metres if in mm (> 6.0), otherwise already in metres
+                    if dw <= 6.0:
+                        girder_area = (dw * tw) + (bft * tft) + (bfb * tfb)
+                    else:
+                        girder_area = ((dw * tw) + (bft * tft) + (bfb * tfb)) / 1e6
             except Exception:
                 pass
 
@@ -203,10 +261,37 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
         stud_d = 0.0
         stud_h_mm = 0.0
 
-        spacing_val = outputs.get("steeldesign.details.shear.longitudinal_spacing")
-        studs_val = outputs.get("steeldesign.details.shear.studs_per_section")
-        stud_d_val = outputs.get("steeldesign.details.shear.diameter") or inputs.get("design_options.shear_studs.diameter")
-        stud_h_val = outputs.get("steeldesign.details.shear.height") or inputs.get("design_options.shear_studs.height")
+        spacing_val = (
+            outputs.get("steeldesign.details.shear.longitudinal_spacing")
+            or outputs.get("design_results", {}).get("stud_spacing_provided_mm")
+            or outputs.get("stud_spacing_provided_mm")
+            or inputs.get("steeldesign.details.shear.longitudinal_spacing")
+            or inputs.get("design_options.shear_studs.spacing")
+            or inputs.get("stud_spacing")
+            or 125.0
+        )
+        studs_val = (
+            outputs.get("steeldesign.details.shear.studs_per_section")
+            or outputs.get("shear_studs_per_section")
+            or inputs.get("steeldesign.details.shear.studs_per_section")
+            or inputs.get("design_options.shear_studs.count")
+            or inputs.get("steeldesign.details.shear.studs_per_section")
+            or 4
+        )
+        stud_d_val = (
+            outputs.get("steeldesign.details.shear.diameter")
+            or outputs.get("shear_stud_diameter")
+            or inputs.get("steeldesign.details.shear.diameter")
+            or inputs.get("design_options.shear_studs.diameter")
+            or 25.0
+        )
+        stud_h_val = (
+            outputs.get("steeldesign.details.shear.height")
+            or outputs.get("shear_stud_height")
+            or inputs.get("steeldesign.details.shear.height")
+            or inputs.get("design_options.shear_studs.height")
+            or 150.0
+        )
 
         if spacing_val is not None and studs_val is not None and stud_d_val is not None and stud_h_val is not None:
             try:
@@ -236,11 +321,11 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             quantities["shear_studs_wt_single"] = f"{single_stud_wt:.6f}"
             quantities["shear_studs_wt_total"] = f"{total_studs_wt:.3f}"
         else:
-            quantities["shear_studs_vol_formula"] = "N.A."
-            quantities["shear_studs_qty"] = "N.A."
-            quantities["shear_studs_vol_total"] = "N.A."
-            quantities["shear_studs_wt_single"] = "N.A."
-            quantities["shear_studs_wt_total"] = "N.A."
+            quantities["shear_studs_vol_formula"] = "---"
+            quantities["shear_studs_qty"] = "---"
+            quantities["shear_studs_vol_total"] = "---"
+            quantities["shear_studs_wt_single"] = "---"
+            quantities["shear_studs_wt_total"] = "---"
 
         # 5. Steel Bracings (Cu.m) and Weight (MT)
         # Find bracing section properties from outputs or skip if not present
@@ -257,12 +342,30 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             if cb_geom:
                 bracing_len_val = cb_geom.get("diagonal_length_m")
 
-        if bracing_area_val is not None and bracing_len_val is not None:
+        if bracing_area_val is not None:
             try:
                 bracing_area = float(bracing_area_val) / 10000.0  # Convert cm² to m²
+            except Exception:
+                pass
+
+        if bracing_len_val is not None:
+            try:
                 bracing_len = float(bracing_len_val)
             except Exception:
                 pass
+
+        # Fallback to section designation from inputs
+        if bracing_area <= 0.0:
+            cb_des = None
+            for k, v in inputs.items():
+                if "cb_bracing_section_designation" in str(k) or "bracing_section_designation" in str(k):
+                    if v:
+                        cb_des = str(v)
+                        break
+            if cb_des:
+                area_cm2 = get_angle_section_area_cm2(cb_des)
+                if area_cm2 > 0.0:
+                    bracing_area = area_cm2 / 10000.0
 
         spacing_val = inputs.get(KEY_TS_GIRDER_SPACING)
         spacing = 0.0
@@ -271,6 +374,22 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                 spacing = float(spacing_val)
             except Exception:
                 pass
+
+        # Girder depth for diagonal length calculation if needed
+        girder_depth = 0.0
+        try:
+            d_val = resolve_girder_value(inputs, "member_properties.girder_details.section_input.web_depth", 0)
+            if d_val is not None:
+                girder_depth = float(d_val)
+                if girder_depth > 6.0:
+                    girder_depth /= 1000.0
+        except Exception:
+            pass
+        if girder_depth <= 0.0:
+            girder_depth = 1.67
+
+        if bracing_len <= 0.0 and spacing > 0.0 and girder_depth > 0.0:
+            bracing_len = math.sqrt(spacing**2 + girder_depth**2)
 
         # Only perform calculations if bracing is designed (area and length are positive)
         if bracing_area > 0.0 and bracing_len > 0.0 and spacing > 0.0:
@@ -283,6 +402,14 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                     cb_spacing = float(cb_spacing_val)
                 except Exception:
                     pass
+            if cb_spacing <= 0.0:
+                for k, v in inputs.items():
+                    if "cb_spacing" in str(k):
+                        try:
+                            cb_spacing = float(v)
+                            break
+                        except Exception:
+                            pass
                     
             if cb_spacing > 0.0:
                 n_panels = max(1, round(span / cb_spacing) - 1)
@@ -328,13 +455,12 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             quantities["bracing_diag_wt_single"] = f"{diag_wt_single:.4f}"
             quantities["bracing_diag_wt_total"] = f"{diag_wt_total:.2f}"
         else:
-            # Keep all bracing volumes, quantities, and weights as default placeholder "N.A."
             for prefix in ("bracing_top", "bracing_bot", "bracing_diag"):
-                quantities[f"{prefix}_vol_formula"] = "N.A."
-                quantities[f"{prefix}_qty"] = "N.A."
-                quantities[f"{prefix}_vol_total"] = "N.A."
-                quantities[f"{prefix}_wt_single"] = "N.A."
-                quantities[f"{prefix}_wt_total"] = "N.A."
+                quantities[f"{prefix}_vol_formula"] = "---"
+                quantities[f"{prefix}_qty"] = "---"
+                quantities[f"{prefix}_vol_total"] = "---"
+                quantities[f"{prefix}_wt_single"] = "---"
+                quantities[f"{prefix}_wt_total"] = "---"
 
         # 5d. End Diaphragms (Cu.m) and Weight (MT)
         ed_type = ""
@@ -356,6 +482,19 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                 ed_area = float(ed_area_cm2) / 10000.0  # cm² to m²
             except Exception:
                 pass
+
+        # Fallback to section designation from inputs
+        if ed_area <= 0.0:
+            ed_des = None
+            for k, v in inputs.items():
+                if ("end_diaphragm" in str(k) and "section_designation" in str(k)) or "ed_bracing" in str(k):
+                    if v:
+                        ed_des = str(v)
+                        break
+            if ed_des:
+                area_cm2 = get_angle_section_area_cm2(ed_des)
+                if area_cm2 > 0.0:
+                    ed_area = area_cm2 / 10000.0
 
         # If cross-bracing ED and no specific ed_area, fallback to bracing_area
         if ed_area <= 0.0 and not ed_is_beam and bracing_area > 0.0:
@@ -380,7 +519,7 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                 ed_geom = (outputs.get("end_diaphragm_forces_dict") or {}).get("geometry") or {}
                 ed_diag_len = float(ed_geom.get("diagonal_length_m") or 0.0)
                 if ed_diag_len <= 0.0:
-                    ed_diag_len = bracing_len if bracing_len > 0.0 else math.sqrt(spacing**2 + (span / 15.0)**2)
+                    ed_diag_len = bracing_len if bracing_len > 0.0 else math.sqrt(spacing**2 + girder_depth**2)
 
                 ed_vol_single = ed_area * (2.0 * ed_diag_len + 2.0 * spacing)
                 ed_vol_total = ed_bays * ed_vol_single
@@ -393,11 +532,11 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                 quantities["ed_wt_single"] = f"{ed_wt_single:.4f}"
                 quantities["ed_wt_total"] = f"{ed_wt_total:.2f}"
         else:
-            quantities["ed_vol_formula"] = "N.A."
-            quantities["ed_qty"] = "N.A."
-            quantities["ed_vol_total"] = "N.A."
-            quantities["ed_wt_single"] = "N.A."
-            quantities["ed_wt_total"] = "N.A."
+            quantities["ed_vol_formula"] = "---"
+            quantities["ed_qty"] = "---"
+            quantities["ed_vol_total"] = "---"
+            quantities["ed_wt_single"] = "---"
+            quantities["ed_wt_total"] = "---"
 
         # 6. Crash Barrier (Cu.m) and Weight (MT)
         KEY_CB_AREA = "typical_section.crash_barrier.area"
@@ -409,8 +548,12 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
                 cb_area = float(cb_area_val) / 1e6
             except Exception:
                 pass
-        
-        if cb_area > 0.0:
+
+        if cb_area <= 0.0 and inputs.get("crash_barrier_wt_total") and inputs.get("crash_barrier_wt_total") not in ("N.A.", "---"):
+            for k in ("crash_barrier_vol_formula", "crash_barrier_qty", "crash_barrier_vol_total", "crash_barrier_wt_single", "crash_barrier_wt_total"):
+                if inputs.get(k):
+                    quantities[k] = str(inputs.get(k))
+        elif cb_area > 0.05:
             cb_vol = cb_area * span
             quantities["crash_barrier_vol_formula"] = f"${cb_area:.5f}\\text{{ m}}^2 \\times {span:.2f}\\text{{ m}} = {cb_vol:.5f}\\text{{ m}}^3$"
             quantities["crash_barrier_qty"] = "2"
@@ -422,31 +565,50 @@ def calculate_material_quantities(inputs: dict, outputs: dict) -> dict:
             total_cb_wt = cb_total_vol * 2.5
             quantities["crash_barrier_wt_single"] = f"{single_cb_wt:.2f}"
             quantities["crash_barrier_wt_total"] = f"{total_cb_wt:.2f}"
+        elif (
+            inputs.get("traffic_lane.barrier_type")
+            or inputs.get("typical_section.crash_barrier.type")
+            or inputs.get("crash_barrier_type")
+            or inputs.get(KEY_CB_TYPE)
+            or inputs.get(KEY_CB_LOAD)
+            or inputs.get("components.crash_barrier.load")
+        ):
+            # Standard New Jersey Crash Barrier area = 0.25 m2 per barrier
+            cb_area = 0.25
+            cb_vol = cb_area * span
+            quantities["crash_barrier_vol_formula"] = f"${cb_area:.2f}\\text{{ m}}^2 \\times {span:.2f}\\text{{ m}} = {cb_vol:.2f}\\text{{ m}}^3$"
+            quantities["crash_barrier_qty"] = "2"
+            cb_total_vol = 2 * cb_vol
+            quantities["crash_barrier_vol_total"] = f"{cb_total_vol:.2f}"
+            single_cb_wt = cb_vol * 2.5
+            total_cb_wt = cb_total_vol * 2.5
+            quantities["crash_barrier_wt_single"] = f"{single_cb_wt:.2f}"
+            quantities["crash_barrier_wt_total"] = f"{total_cb_wt:.2f}"
         else:
-            quantities["crash_barrier_vol_formula"] = "N.A."
-            quantities["crash_barrier_qty"] = "N.A."
-            quantities["crash_barrier_vol_total"] = "N.A."
-            quantities["crash_barrier_wt_single"] = "N.A."
-            quantities["crash_barrier_wt_total"] = "N.A."
+            quantities["crash_barrier_vol_formula"] = "---"
+            quantities["crash_barrier_qty"] = "---"
+            quantities["crash_barrier_vol_total"] = "---"
+            quantities["crash_barrier_wt_single"] = "---"
+            quantities["crash_barrier_wt_total"] = "---"
 
         # 7. Total Structural Steel Summary (MT)
         try:
             total_steel_mt = 0.0
             has_steel = False
             gw = quantities.get("steel_girders_wt_total")
-            if gw and gw != "N.A.":
+            if gw and gw not in ("N.A.", "---"):
                 total_steel_mt += float(gw)
                 has_steel = True
             for k in ("bracing_top_wt_total", "bracing_bot_wt_total", "bracing_diag_wt_total", "ed_wt_total"):
                 bw = quantities.get(k)
-                if bw and bw != "N.A.":
+                if bw and bw not in ("N.A.", "---"):
                     total_steel_mt += float(bw)
             if has_steel:
                 quantities["total_structural_steel_wt"] = f"{total_steel_mt:.2f}"
             else:
-                quantities["total_structural_steel_wt"] = "N.A."
+                quantities["total_structural_steel_wt"] = "---"
         except Exception:
-            quantities["total_structural_steel_wt"] = "N.A."
+            quantities["total_structural_steel_wt"] = "---"
 
     except Exception as exc:
         logger.warning(f"Error calculating material quantities: {exc}")

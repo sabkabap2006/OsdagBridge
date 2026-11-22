@@ -119,7 +119,7 @@ DEFAULT_BITUMINOUS_DENSITY = 24.0    # bituminous wearing course
 LANE_REDUCTION_FACTORS = [1.0, 0.8, 0.4]
 
 # IRC 22:2015 Cl.605 Table 3 — partial safety factor for fatigue strength.
-GAMMA_MFT_FATIGUE = 1.35
+GAMMA_MFT_FATIGUE = 1.25
 
 # Design Capacity Ratio thresholds (PASS < DCR_PASS_THRESHOLD ≤ WARN < DCR_FAIL_THRESHOLD ≤ FAIL).
 DCR_PASS_THRESHOLD = 0.90

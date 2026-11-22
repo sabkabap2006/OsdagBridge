@@ -3365,8 +3365,35 @@ class PlateGirderBridge:
             B_fb=B_bot,
         )
 
-        _angle_dims = SectionDimsDTO(leg_h=100, leg_w=50, connection_type="LONGER_LEG")
-        _small_dims = SectionDimsDTO(leg_h=80,  leg_w=40, connection_type="LONGER_LEG")
+        def _parse_angle_dims(desig_str, default_a=100.0, default_b=100.0, default_t=10.0):
+            import re
+            m = re.findall(r"\d+(?:\.\d+)?", str(desig_str or ""))
+            if len(m) >= 3:
+                return float(m[0]), float(m[1]), float(m[2])
+            elif len(m) == 2:
+                return float(m[0]), float(m[0]), float(m[1])
+            return default_a, default_b, default_t
+
+        cb_raw_des = None
+        for k, v in self.output_dict.items():
+            if "cross_bracing" in str(k) and "bracing_section_designation" in str(k) and v:
+                cb_raw_des = str(v)
+                break
+        if not cb_raw_des:
+            cb_raw_des = self.output_dict.get(KEY_MP_CB_BRACING_SECTION_DESIGNATION, "ISA 100x100x10")
+        cb_a, cb_b, cb_t = _parse_angle_dims(cb_raw_des, 100.0, 100.0, 10.0)
+
+        ed_raw_des = None
+        for k, v in self.output_dict.items():
+            if "end_diaphragm" in str(k) and "bracing_section_designation" in str(k) and v:
+                ed_raw_des = str(v)
+                break
+        if not ed_raw_des:
+            ed_raw_des = self.output_dict.get(KEY_MP_ED_BRACING_SECTION_DESIGNATION, "ISA 110x110x12")
+        ed_a, ed_b, ed_t = _parse_angle_dims(ed_raw_des, 110.0, 110.0, 12.0)
+
+        _cb_angle_dims = SectionDimsDTO(leg_h=cb_a, leg_w=cb_b, connection_type="LONGER_LEG")
+        _ed_angle_dims = SectionDimsDTO(leg_h=ed_a, leg_w=ed_b, connection_type="LONGER_LEG")
 
 
         raw_cb_value = self.output_dict.get(KEY_CB_TYPE, ["IRC 5 - RCC Crash Barrier"])
@@ -3593,27 +3620,27 @@ class PlateGirderBridge:
             x_bracket_option="BOTH",
             k_top_bracket=True,
             diagonal_section_type="ANGLE",
-            diagonal_section_dims=_angle_dims,
-            diagonal_thickness=8.0,
-            top_chord_section_type="DOUBLE_CHANNEL",
-            top_chord_section_dims=_small_dims,
-            top_chord_thickness=8.0,
+            diagonal_section_dims=_cb_angle_dims,
+            diagonal_thickness=cb_t,
+            top_chord_section_type="ANGLE",
+            top_chord_section_dims=_cb_angle_dims,
+            top_chord_thickness=cb_t,
             bottom_chord_section_type="ANGLE",
-            bottom_chord_section_dims=_small_dims,
-            bottom_chord_thickness=8.0,
+            bottom_chord_section_dims=_cb_angle_dims,
+            bottom_chord_thickness=cb_t,
             # --- End diaphragm ---
             end_diaphragm_type="Cross Bracing",
             end_diaphragm_spacing=200,
             end_diaphragm_bracing_type="X",
             end_diaphragm_diagonal_section_type="ANGLE",
-            end_diaphragm_diagonal_section_dims=_angle_dims,
-            end_diaphragm_diagonal_thickness=8.0,
-            end_diaphragm_top_chord_section_type="CHANNEL",
-            end_diaphragm_top_chord_section_dims=_small_dims,
-            end_diaphragm_top_chord_thickness=8.0,
+            end_diaphragm_diagonal_section_dims=_ed_angle_dims,
+            end_diaphragm_diagonal_thickness=ed_t,
+            end_diaphragm_top_chord_section_type="ANGLE",
+            end_diaphragm_top_chord_section_dims=_ed_angle_dims,
+            end_diaphragm_top_chord_thickness=ed_t,
             end_diaphragm_bottom_chord_section_type="ANGLE",
-            end_diaphragm_bottom_chord_section_dims=_small_dims,
-            end_diaphragm_bottom_chord_thickness=8.0,
+            end_diaphragm_bottom_chord_section_dims=_ed_angle_dims,
+            end_diaphragm_bottom_chord_thickness=ed_t,
             end_diaphragm_section="I_SECTION",
             end_diaphragm_dims=ISectionDimsDTO(
                 depth=D * 0.6,
